@@ -24,8 +24,11 @@ _EMB_DIM = 100
 _MAX_WLEN = 18
 _VOCAB = -1
 
-pickle_path = _DIR + "data.pkl"
+train_pickle_path = _DIR + "train_data.pkl"
+test_pickle_path = _DIR + "test_data.pkl"
+val_pickle_path = _DIR + "val_data.pkl"
 partition_path = _DIR + "storyid_partition.txt"
+metadata_path = _DIR + "metadata.json"
 annotation_path = _DIR + "json_version/annotations.json" 
 
 classes = ["joy", "trust", "fear", "surprise", "sadness", "disgust", "anger", "anticipation"]
@@ -94,9 +97,9 @@ def get_labels(charay):
         onehot = [1 if i in majority else 0 for i in classes]
         return onehot
 
-def create_dataset(load=True, data_type="test"):
+def create_dataset(data_type="train"):
     global annotation_path, partition_path
-    data_type = "valid" if data_type == "train" else data_type
+    data_type = "dev" if data_type == "train" else data_type
     annotation_file = open(annotation_path, "r")
     raw_data = json.load(annotation_file, object_pairs_hook=OrderedDict)
     glove = load_glove()
@@ -153,25 +156,6 @@ def create_dataset(load=True, data_type="test"):
 
     return text_arr, all_labels, mask_arr, char_arr # stories_dat # - ALL ARE LISTS
 
-def parse():
-    text_arr, all_labels, mask_arr, char_arr = create_dataset()
-    
-    dataset_size = len(text_arr)
-    sentence_lengths = [story.shape[0] for story in text_arr]
-    word_lengths = [len(story[ss]) for story in text_arr for ss in range(story.shape[0])]
-
-    max_sentence_length = max(sentence_lengths)
-    max_word_length = max(word_lengths)
-    max_char_length = max(char_arr)
-
-    print(max_sentence_length, max_word_length, max_char_length)
-    mask_dim, labels_dim = len(all_labels[0]), len(all_labels[0][0])
-    embedding_dim = _EMB_DIM
-
-    text_arr, all_labels, mask_arr = pad_stories(text_arr, all_labels, mask_arr, max_sentence_length, max_word_length, max_char_length)
-    #stories_train = (text_arr, all_labels, mask_arr)
-    print(text_arr.shape, all_labels.shape, mask_arr.shape)
-
 def pad_stories(text_arr, all_labels, mask_arr, max_sentence_length, max_word_length, max_char_length):
     
     for i in range(len(text_arr)):
@@ -227,9 +211,79 @@ def pad_stories(text_arr, all_labels, mask_arr, max_sentence_length, max_word_le
 
     return text_arr, all_labels, mask_arr
 
+def parse():
+    train_data, test_data, val_data = (), (), ()
+    
+    if(os.path.isfile(train_pickle_path)):
+        file = open(train_pickle_path, 'rb+')
+        train_data = pickle.load(file)
+        file.close()
+
+    if(os.path.isfile(test_pickle_path)):
+        file = open(test_pickle_path, 'rb+')
+        test_data = pickle.load(file)
+        file.close()
+
+    if(len(train_data) != 0 and len(test_data) != 0):
+        return train_data, test_data 
+
+    data = {"train" : (), "test" :()}
+    msl, mwl, mcl, mask_dim, labels_dim, embedding_dim = 0, 0, 0, 0, 0, _EMB_DIM
+
+    for dtype in data.keys():
+        text_arr, all_labels, mask_arr, char_arr = create_dataset(data_type=dtype)
+    
+        dataset_size = len(text_arr)
+        sentence_lengths = [story.shape[0] for story in text_arr]
+        word_lengths = [len(story[ss]) for story in text_arr for ss in range(story.shape[0])]
+
+        max_sentence_length = max(sentence_lengths)
+        max_word_length = max(word_lengths)
+        max_char_length = max(char_arr)
+
+        if(max_sentence_length > msl):
+            msl = max_sentence_length
+        if(max_word_length > mwl):
+            mwl = max_word_length
+        if(max_char_length > mcl):
+            mcl = max_char_length
+
+        mask_dim, labels_dim = len(all_labels[0]), len(all_labels[0][0])
+        data[dtype] = (text_arr, all_labels,  mask_arr)
+        # TODO : MOVE
+    print(msl, mwl, mcl)    
+    for dtype in data.keys():
+        text_arr, all_labels, mask_arr = data[dtype]
+        text_arr, all_labels, mask_arr = pad_stories(text_arr, all_labels, mask_arr, msl, mwl, mcl)
+        data[dtype] = (text_arr, all_labels,  mask_arr)
+        print(text_arr.shape, all_labels.shape, mask_arr.shape)
+
+    with open(metadata_path, 'w') as f:
+        metadata = {
+            'max_char_length': mcl,
+            'max_word_length': mwl,
+            'max_sentence_length': msl,
+            'mask_dim' : mask_dim,
+            'labels_dim' : labels_dim,
+            'emedding_dim' : embedding_dim,
+            'vocab_size': _VOCAB,
+            'dataset_size': dataset_size,
+        }
+        json.dump(metadata, f)
+
+    with open(train_pickle_path, "wb+") as handle:
+        pickle.dump(data["train"], handle)
+
+    with open(test_pickle_path, "wb+") as handle:
+        pickle.dump(data["test"], handle)
+
+    return data["train"], data["test"], None, None # TODO : Change this
 
 def tokenize(sentence):
     """
     Tokenize a string by splitting on non-word characters and stripping whitespace.
     """
     return [token.strip().lower() for token in re.split(SPLIT_RE, sentence) if token.strip()]
+
+if __name__ == '__main__':
+    parse()

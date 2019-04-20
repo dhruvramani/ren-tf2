@@ -10,15 +10,29 @@ import os
 import pickle
 import tensorflow as tf
 import tflearn
+import json
 
 FLAGS = tf.app.flags.FLAGS
 
+_DIR = "/home/nevronas/Projects/Personal-Projects/Dhruv/NeuralDialog-CVAE/data/commonsense/"
+_GLOVE_PATH = '/home/nevronas/word_embeddings/glove_twitter'
+_EMB_DIM = 100
+_MAX_WLEN = 18
+_VOCAB = -1
+
+pickle_path = _DIR + "data.pkl"
+metadata_path = _DIR + "metadata.json"
+partition_path = _DIR + "storyid_partition.txt"
+annotation_path = _DIR + "json_version/annotations.json" 
+
+classes = ["joy", "trust", "fear", "surprise", "sadness", "disgust", "anger", "anticipation"]
+
 # Run Details
-tf.app.flags.DEFINE_integer("task_id", 1, "ID of Task to Train/Evaluate [1 - 20].")
-tf.app.flags.DEFINE_string("data_path", "tasks/en-valid-10k", "Path to Training Data")
+#tf.app.flags.DEFINE_integer("task_id", 1, "ID of Task to Train/Evaluate [1 - 20].")
+#tf.app.flags.DEFINE_string("data_path", "tasks/en-valid-10k", "Path to Training Data")
 
 # Model Details
-tf.app.flags.DEFINE_integer("embedding_size", 100, "Dimensionality of word embeddings.")
+tf.app.flags.DEFINE_integer("embedding_size", _EMB_DIM, "Dimensionality of word embeddings.")
 tf.app.flags.DEFINE_integer("memory_slots", 20, "Number of dynamic memory slots.")
 
 # Training Details
@@ -35,26 +49,33 @@ tf.app.flags.DEFINE_float("validation_threshold", .95, "Validation threshold for
 
 def main(_):
     # Get Vectorized Forms of Stories, Questions, and Answers
-    train, val, test, word2id = parse(FLAGS.data_path, FLAGS.task_id)
-    trainS, trainS_len, trainQ, trainA, _ = train
-    valS, valS_len, valQ, valA, _ = val
-    testS, testS_len, testQ, testA, _ = test
+    train, test, val, _ = parse()
+    train_text_arr, train_all_labels, train_mask_arr = train
+    #val_text_arr, val_all_labels, val_mask_arr = val
+    test_text_arr, test_all_labels, test_mask_arr = test
+
+    #trainS, trainS_len, trainQ, trainA, _ = train
+    #valS, valS_len, valQ, valA, _ = val
+    #testS, testS_len, testQ, testA, _ = test
 
     # Assert Shapes
-    assert(trainS.shape[1:] == valS.shape[1:] == testS.shape[1:])
-    assert(trainQ.shape[1] == valQ.shape[1] == testQ.shape[1])
+    #assert(trainS.shape[1:] == valS.shape[1:] == testS.shape[1:])
+    #assert(trainQ.shape[1] == valQ.shape[1] == testQ.shape[1])
 
     # Setup Checkpoint + Log Paths
-    ckpt_dir = "./checkpoints/qa_%d/" % FLAGS.task_id
+    ckpt_dir = "./checkpoints/"
     if not os.path.exists(ckpt_dir):
         os.mkdir(ckpt_dir)
     
+    with tf.gfile.Open(metadata_path) as metadata_file:
+        metadata = json.load(metadata_file)
+
     # Build Model
     with tf.Session() as sess:
         # Instantiate Model
-        entity_net = EntityNetwork(word2id, trainS.shape[2], trainS.shape[1], FLAGS.batch_size,
+        entity_net = EntityNetwork(metadata['vocab_size'], metadata['max_word_length'], metadata['max_sentence_length'], FLAGS.batch_size,
                                    FLAGS.memory_slots, FLAGS.embedding_size, FLAGS.learning_rate, 
-                                   FLAGS.decay_epochs * (trainS.shape[0]/FLAGS.batch_size), FLAGS.decay_rate)
+                                   FLAGS.decay_epochs * (metadata['dataset_size'] / FLAGS.batch_size), FLAGS.decay_rate)
         
         # Initialize Saver
         saver = tf.train.Saver()

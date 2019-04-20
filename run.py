@@ -54,14 +54,6 @@ def main(_):
     #val_text_arr, val_all_labels, val_mask_arr = val
     test_text_arr, test_all_labels, test_mask_arr = test
 
-    #trainS, trainS_len, trainQ, trainA, _ = train
-    #valS, valS_len, valQ, valA, _ = val
-    #testS, testS_len, testQ, testA, _ = test
-
-    # Assert Shapes
-    #assert(trainS.shape[1:] == valS.shape[1:] == testS.shape[1:])
-    #assert(trainQ.shape[1] == valQ.shape[1] == testQ.shape[1])
-
     # Setup Checkpoint + Log Paths
     ckpt_dir = "./checkpoints/"
     if not os.path.exists(ckpt_dir):
@@ -74,7 +66,7 @@ def main(_):
     with tf.Session() as sess:
         # Instantiate Model
         entity_net = EntityNetwork(metadata['vocab_size'], metadata['max_word_length'], metadata['max_sentence_length'], FLAGS.batch_size,
-                                   FLAGS.memory_slots, FLAGS.embedding_size, FLAGS.learning_rate, 
+                                   FLAGS.memory_slots, FLAGS.embedding_size, metadata['mask_dim'], metadata['labels_dim'], FLAGS.learning_rate, 
                                    FLAGS.decay_epochs * (metadata['dataset_size'] / FLAGS.batch_size), FLAGS.decay_rate)
         
         # Initialize Saver
@@ -95,15 +87,14 @@ def main(_):
         curr_epoch = sess.run(entity_net.epoch_step)
 
         # Start Training Loop
-        n, val_n, test_n, bsz, best_val = trainS.shape[0], valS.shape[0], testS.shape[0], FLAGS.batch_size, 0.0
+        n, test_n, bsz, best_val = train_text_arr.shape[0], test_text_arr.shape[0], FLAGS.batch_size, 0.0
         for epoch in range(curr_epoch, FLAGS.num_epochs):
             loss, acc, counter = 0.0, 0.0, 0
             for start, end in zip(range(0, n, bsz), range(bsz, n, bsz)):
                 curr_loss, curr_acc, _ = sess.run([entity_net.loss_val, entity_net.accuracy, entity_net.train_op], 
-                                                  feed_dict={entity_net.S: trainS[start:end], 
-                                                             entity_net.S_len: trainS_len[start:end],
-                                                             entity_net.Q: trainQ[start:end],
-                                                             entity_net.A: trainA[start:end]})
+                                                  feed_dict={entity_net.S: train_text_arr[start:end], 
+                                                             entity_net.labels: train_all_labels[start:end],
+                                                             entity_net.mask: train_mask_arr[start:end]})
                 loss, acc, counter = loss + curr_loss, acc + curr_acc, counter + 1
                 if counter % 100 == 0:
                     print "Epoch %d\tBatch %d\tTrain Loss: %.3f\tTrain Accuracy: %.3f" % (epoch, 
@@ -117,8 +108,8 @@ def main(_):
 
             # Validate every so often
             if epoch % FLAGS.validate_every == 0:
-                val_loss_val, val_acc_val = do_eval(val_n, bsz, sess, entity_net, valS, valS_len, valQ, valA)
-                print "Epoch %d Validation Loss: %.3f\tValidation Accuracy: %.3f" % (epoch, val_loss_val, val_acc_val)
+                val_loss_val, val_acc_val = do_eval(test_n, bsz, sess, entity_net, test_text_arr, test_all_labels, test_mask_arr)
+                print "Epoch %d Test Loss: %.3f\Tes F1: %.3f" % (epoch, val_loss_val, val_acc_val)
                 
                 # Add val loss, val acc to data 
                 val_loss[epoch], val_acc[epoch] = val_loss_val, val_acc_val
@@ -137,22 +128,21 @@ def main(_):
                     break
         
         # Test Loop
-        test_loss, test_acc = do_eval(test_n, bsz, sess, entity_net, testS, testS_len, testQ, testA)
+        test_loss, test_acc = do_eval(test_n, bsz, sess, entity_net, test_text_arr, test_all_labels, test_mask_arr)
         
         # Print and Write Test Loss/Accuracy
         print "Test Loss: %.3f\tTest Accuracy: %.3f" % (test_loss, test_acc)
         with open(ckpt_dir + "output.txt", 'w') as g:
             g.write("Test Loss: %.3f\tTest Accuracy: %.3f\n" % (test_loss, test_acc))
 
-def do_eval(n, bsz, sess, entity_net, evalS, evalS_len, evalQ, evalA):
+def do_eval(n, bsz, sess, entity_net, text_arr, labels, mask):
     """Perform an Evaluation Epoch on the Given Data"""
     eval_loss, eval_acc, eval_counter = 0.0, 0.0, 0
     for start, end in zip(range(0, n, bsz), range(bsz, n, bsz)):
         curr_eval_loss, curr_eval_acc = sess.run([entity_net.loss_val, entity_net.accuracy],
-                                                 feed_dict={entity_net.S: evalS[start:end],
-                                                            entity_net.S_len: evalS_len[start:end],
-                                                            entity_net.Q: evalQ[start:end],
-                                                            entity_net.A: evalA[start:end]})
+                                                 feed_dict={entity_net.S: text_arr[start:end],
+                                                            entity_net.labels: labels[start:end],
+                                                            entity_net.mask: mask[start:end]})
         eval_loss, eval_acc, eval_counter = eval_loss + curr_eval_loss, eval_acc + curr_eval_acc, eval_counter + 1
     return eval_loss / float(eval_counter), eval_acc / float(eval_counter)
     

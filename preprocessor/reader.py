@@ -209,23 +209,25 @@ def pad_stories(text_arr, all_labels, mask_arr, max_sentence_length, max_word_le
     text_arr = np.asarray(text_arr)     # Shape : [max_sentence_length, max_word_length, embedding_dim]
     all_labels = np.asarray(all_labels) # Shape : [max_sentence_length, s_d * c_d, labels_dim]
 
+    mask_arr = np.expand_dims(mask_arr, 2)
     return text_arr, all_labels, mask_arr
 
-def parse():
+def parse(load=True):
     train_data, test_data, val_data = (), (), ()
     
-    if(os.path.isfile(train_pickle_path)):
+    if(os.path.isfile(train_pickle_path) and load == True):
         file = open(train_pickle_path, 'rb+')
         train_data = pickle.load(file)
         file.close()
 
-    if(os.path.isfile(test_pickle_path)):
+    if(os.path.isfile(test_pickle_path) and load == True):
         file = open(test_pickle_path, 'rb+')
         test_data = pickle.load(file)
         file.close()
 
     if(len(train_data) != 0 and len(test_data) != 0):
-        return train_data, test_data 
+        print(train_data[0].shape, train_data[1].shape, train_data[2].shape, test_data[0].shape)
+        return train_data, test_data, None, None
 
     data = {"train" : (), "test" :()}
     msl, mwl, mcl, mask_dim, labels_dim, embedding_dim = 0, 0, 0, 0, 0, _EMB_DIM

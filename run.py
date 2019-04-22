@@ -91,21 +91,21 @@ def main(_):
         for epoch in range(curr_epoch, FLAGS.num_epochs):
             loss, acc, counter = 0.0, 0.0, 0
             for start, end in zip(range(0, n, bsz), range(bsz, n, bsz)):
-                curr_loss, curr_acc, _ = sess.run([entity_net.loss_val, entity_net.accuracy, entity_net.train_op], 
+                curr_loss, _ = sess.run([entity_net.loss_val, entity_net.train_op], # curr_ac, _ = [entity_net.accuracy] 
                                                   feed_dict={entity_net.S: train_text_arr[start:end], 
                                                              entity_net.labels: train_all_labels[start:end],
                                                              entity_net.mask: train_mask_arr[start:end]})
-                loss, acc, counter = loss + curr_loss, acc + curr_acc, counter + 1
+                loss, acc, counter = loss + curr_loss, 0, counter + 1
+                print("Epoch %d\tBatch %d \t Train Loss: %.3f \t Train Accuracy: %.3f" % (epoch, counter, loss / float(counter), acc / float(counter)), end="\r")
                 if counter % 100 == 0:
-                    print("Epoch %d\tBatch %d\tTrain Loss: %.3f\tTrain Accuracy: %.3f" % (epoch, 
-                        counter, loss / float(counter), acc / float(counter)))
+                    print("Epoch %d\tBatch %d\tTrain Loss: %.3f\tTrain Accuracy: %.3f" % (epoch, counter, loss / float(counter), acc / float(counter)))
             
             # Add train loss, train acc to data
             train_loss[epoch], train_acc[epoch] = loss / float(counter), acc / float(counter)
 
             # Increment Epoch
             sess.run(entity_net.epoch_increment)
-
+            '''
             # Validate every so often
             if epoch % FLAGS.validate_every == 0:
                 val_loss_val, val_acc_val = do_eval(test_n, bsz, sess, entity_net, test_text_arr, test_all_labels, test_mask_arr)
@@ -126,10 +126,11 @@ def main(_):
                 # Early Stopping Condition
                 if best_val > FLAGS.validation_threshold:
                     break
-        
+            
         # Test Loop
         test_loss, test_acc = do_eval(test_n, bsz, sess, entity_net, test_text_arr, test_all_labels, test_mask_arr)
-        
+        '''
+
         # Print and Write Test Loss/Accuracy
         print("Test Loss: %.3f\tTest Accuracy: %.3f" % (test_loss, test_acc))
         with open(ckpt_dir + "output.txt", 'w') as g:

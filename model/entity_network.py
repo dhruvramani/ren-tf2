@@ -25,7 +25,7 @@ prelu = functools.partial(prelu_func, initializer=tf.constant_initializer(1.0))
 
 
 class EntityNetwork():
-    def __init__(self, vocabulary, sentence_len, story_len, batch_size, memory_slots, embedding_size, mask_dim, labels_dim
+    def __init__(self, vocabulary, sentence_len, story_len, batch_size, memory_slots, embedding_size, mask_dim, labels_dim,
                  learning_rate, decay_steps, decay_rate, clip_gradients=40.0, 
                  initializer=tf.random_normal_initializer(stddev=0.1)):
         """
@@ -35,13 +35,13 @@ class EntityNetwork():
         :param sentence_len: Maximum length of a sentence.
         :param story_len: Maximum length of a story.
         """
-        self.vocab_sz, self.sentence_len, self.story_len, self.mask_dim = len(vocabulary), sentence_len, story_len, mask_dim
+        self.vocab_sz, self.sentence_len, self.story_len, self.mask_dim = vocabulary, sentence_len, story_len, mask_dim
         self.embed_sz, self.memory_slots, self.init, self.labels_dim = embedding_size, memory_slots, initializer, labels_dim
         self.bsz, self.lr, self.decay_steps, self.decay_rate = batch_size, learning_rate, decay_steps, decay_rate
         self.clip_gradients = clip_gradients
 
         # Setup Placeholders
-        self.S = tf.placeholder(tf.flaot32, [None, self.story_len, self.sentence_len, self.embed_sz], name="Story")
+        self.S = tf.placeholder(tf.float32, [None, self.story_len, self.sentence_len, self.embed_sz], name="Story")
         #self.S_len = tf.placeholder(tf.int32, [None], name="Story_Length")
         self.labels = tf.placeholder(tf.float32, [None, self.mask_dim, self.labels_dim], name="Labels")
         self.mask = tf.placeholder(tf.float32, [None, self.mask_dim, 1], name="Mask")
@@ -91,9 +91,9 @@ class EntityNetwork():
         # Create Memory Cell
         self.cell = DynamicMemory(self.memory_slots, self.embed_sz, self.keys)
 
-        self.output_w1 = tf.get_variable("OP_W1", [self.embed_sz], initializer=self.init)
+        self.output_w1 = tf.get_variable("OP_W1", [self.memory_slots, self.embed_sz], initializer=self.init)
         # TODO : SEE WHAT TO DO WITH THIS - Output Module Variables
-        self.H = tf.get_variable("H", [self.embed_sz, self.embed_sz], initializer=self.init) # TODO debug shape here
+        self.H = tf.get_variable("H", [self.memory_slots, self.embed_sz], initializer=self.init) # TODO debug shape here
         self.R = tf.get_variable("R", [self.embed_sz, self.mask_dim * self.labels_dim], initializer=self.init) # TODO : Bring it to [None, mask_dim, labels_dim]
 
     def inference(self):
@@ -113,13 +113,11 @@ class EntityNetwork():
 
         # Send Story through Memory Cell
         initial_state = self.cell.zero_state(self.bsz, dtype=tf.float32)
-        _, memories = tf.nn.dynamic_rnn(self.cell, story_embeddings, sequence_length=self.story_len, 
-                                        initial_state=initial_state)
+        _, memories = tf.nn.dynamic_rnn(self.cell, story_embeddings, initial_state=initial_state) # sequence_length=self.story_len,
 
         # Output Module 
         stacked_memories = tf.stack(memories, axis=1)
-        op_embedd = tf.reduce_sum(tf.multiply(stacked_memories, tf.expand_dims(self.output_w1, 1)), axis=[2]) # shape : [None, mem_slots]
-        op_embedd = tf.expand_dims(op_embedd, 2) # shape [None, mem_slots, 1]
+        op_embedd = tf.reduce_sum(tf.multiply(stacked_memories, self.output_w1), axis=[2]) # shape : [None, mem_slots]
         op_embedd = tf.matmul(op_embedd, self.H)
         logits = tf.matmul(op_embedd, self.R)
         logits = tf.reshape(logits, [-1, self.mask_dim, self.labels_dim])
@@ -152,7 +150,7 @@ class EntityNetwork():
         Build loss computation - softmax cross-entropy between logits, and correct answer. 
         """
         # TODO : Might have to implement my own loss
-        return tf.losses.sparse_sigmoid_cross_entropy(self.ground_truth, self.logits)
+        return tf.losses.sigmoid_cross_entropy(self.ground_truth, self.logits)
     
     def train(self):
         """

@@ -18,8 +18,8 @@ PAD_ID = 0
 SPLIT_RE = re.compile('(\W+)?')
 DATA_TYPES = ['train', 'valid', 'test']
 
-_DIR = "/home/nevronas/Projects/Personal-Projects/Dhruv/NeuralDialog-CVAE/data/commonsense/"
-_GLOVE_PATH = '/home/nevronas/word_embeddings/glove_twitter'
+_DIR = "/mnt/data/devamanyu/work/StoryCommonSense/storycommonsense_data/"
+_GLOVE_PATH = '/mnt/data/devamanyu/work/glove_twitter'
 _EMB_DIM = 100
 _MAX_WLEN = 18
 _VOCAB = -1
@@ -99,6 +99,7 @@ def get_labels(charay):
 
 def create_dataset(data_type="train"):
     global annotation_path, partition_path
+
     data_type = "dev" if data_type == "train" else data_type
     annotation_file = open(annotation_path, "r")
     raw_data = json.load(annotation_file, object_pairs_hook=OrderedDict)
@@ -109,13 +110,21 @@ def create_dataset(data_type="train"):
     with open(partition_path, "r") as partition_file:
         for line in partition_file:
             id_key = line.split("\t")[0]
+
+            if id_key not in raw_data.keys():
+                print("Here")
+                continue
+
             story = raw_data[id_key]
+
             
             if(story["partition"] != data_type):
                 continue 
 
+
             sentences = story["lines"]
             characters = sentences['1']["characters"]
+
             
             s_dim, c_dim, count = len(sentences.keys()), len(characters.keys()), 0
             mask_dim = s_dim * c_dim
@@ -205,7 +214,7 @@ def pad_stories(text_arr, all_labels, mask_arr, max_sentence_length, max_word_le
         pad_length = max_sentence_length * max_char_length - shape[0]
         mask_arr[i] = np.pad(mask, ((0, pad_length)), 'constant')
 
-    mask_arr = np.asarray(mask_arr)     # Shape : [max_sentence_length, s_d * c_d]
+    mask_arr = np.asarray(mask_arr, dtype='int')     # Shape : [max_sentence_length, s_d * c_d]
     text_arr = np.asarray(text_arr)     # Shape : [max_sentence_length, max_word_length, embedding_dim]
     all_labels = np.asarray(all_labels) # Shape : [max_sentence_length, s_d * c_d, labels_dim]
 
@@ -250,10 +259,12 @@ def parse(load=True):
         if(max_char_length > mcl):
             mcl = max_char_length
 
-        mask_dim, labels_dim = len(all_labels[0]), len(all_labels[0][0])
+        _, labels_dim = len(all_labels[0]), len(all_labels[0][0])
+        mask_dim = max_sentence_length*max_char_length
         data[dtype] = (text_arr, all_labels,  mask_arr)
         # TODO : MOVE
-    print(msl, mwl, mcl)    
+    print(msl, mwl, mcl)  
+
     for dtype in data.keys():
         text_arr, all_labels, mask_arr = data[dtype]
         text_arr, all_labels, mask_arr = pad_stories(text_arr, all_labels, mask_arr, msl, mwl, mcl)

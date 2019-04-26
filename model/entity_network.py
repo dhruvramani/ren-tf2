@@ -44,14 +44,17 @@ class EntityNetwork():
         self.S = tf.placeholder(tf.float32, [None, self.story_len, self.sentence_len, self.embed_sz], name="Story")
         #self.S_len = tf.placeholder(tf.int32, [None], name="Story_Length")
         self.labels = tf.placeholder(tf.float32, [None, self.mask_dim, self.labels_dim], name="Labels")
-        self.mask = tf.placeholder(tf.float32, [None, self.mask_dim, 1], name="Mask")
+        self.mask = tf.placeholder(tf.int32, [None, self.mask_dim, 1], name="Mask")
+
+        self.ground_truth = tf.reshape(self.labels, (-1, self.labels_dim))
+        self.mask_reshaped = tf.reshape(self.mask, (-1,1))
+
 
         # Setup Global, Epoch Step 
         self.global_step = tf.Variable(0, trainable=False, name="Global_Step")
         self.epoch_step = tf.Variable(0, trainable=False, name="Epoch_Step")
         self.epoch_increment = tf.assign(self.epoch_step, tf.add(self.epoch_step, tf.constant(1)))
 
-        self.ground_truth = tf.math.multiply(self.mask, self.labels)
         #self.ground_truth = tf.reshape(self.ground_truth, [-1, self.mask_dim * sekf.labels_dim])
         # Instantiate Network Weights
         self.instantiate_weights()
@@ -93,8 +96,8 @@ class EntityNetwork():
 
         self.output_w1 = tf.get_variable("OP_W1", [self.memory_slots, self.embed_sz], initializer=self.init)
         # TODO : SEE WHAT TO DO WITH THIS - Output Module Variables
-        self.H = tf.get_variable("H", [self.memory_slots, self.embed_sz], initializer=self.init) # TODO debug shape here
-        self.R = tf.get_variable("R", [self.embed_sz, self.mask_dim * self.labels_dim], initializer=self.init) # TODO : Bring it to [None, mask_dim, labels_dim]
+        # self.H = tf.get_variable("H", [self.embed_sz, self.embed_sz], initializer=self.init) # TODO debug shape here
+        self.R = tf.get_variable("R", [self.embed_sz, self.labels_dim], initializer=self.init) # TODO : Bring it to [None, mask_dim, labels_dim]
 
     def inference(self):
         """
@@ -103,8 +106,8 @@ class EntityNetwork():
         """
         # Story Input Encoder
         #story_embeddings = tf.nn.embedding_lookup(self.E, self.S)             # Shape: [None, story_len, sent_len, embed_sz]
-        story_embeddings = tf.multiply(self.S, self.story_mask)     # Shape: [None, story_len, sent_len, embed_sz]
-        story_embeddings = tf.reduce_sum(story_embeddings, axis=[2])          # Shape: [None, story_len, embed_sz]
+        # story_embeddings = tf.multiply(self.S, self.story_mask)     # Shape: [None, story_len, sent_len, embed_sz]
+        story_embeddings = tf.reduce_sum(self.S, axis=[2])          # Shape: [None, story_len, embed_sz]
 
         # Query Input Encoder
         #query_embedding = tf.nn.embedding_lookup(self.E, self.Q)              # Shape: [None, sent_len, embed_sz]
@@ -113,16 +116,29 @@ class EntityNetwork():
 
         # Send Story through Memory Cell
         initial_state = self.cell.zero_state(self.bsz, dtype=tf.float32)
-        _, memories = tf.nn.dynamic_rnn(self.cell, story_embeddings, initial_state=initial_state) # sequence_length=self.story_len,
-
-        # Output Module 
-        stacked_memories = tf.stack(memories, axis=1)
-        op_embedd = tf.reduce_sum(tf.multiply(stacked_memories, self.output_w1), axis=[2]) # shape : [None, mem_slots]
-        op_embedd = tf.matmul(op_embedd, self.H)
-        logits = tf.matmul(op_embedd, self.R)
-        logits = tf.reshape(logits, [-1, self.mask_dim, self.labels_dim])
+        memory_traces, memories = tf.nn.dynamic_rnn(self.cell, story_embeddings, initial_state=initial_state) # sequence_length=self.story_len,
+        
+        stacked_memories = tf.stack(memory_traces, axis=2)
+        memories = tf.reshape(stacked_memories, (-1, self.mask_dim, self.embed_sz))
+        
+        # map each memory output into label_dim
+        op_embedd = tf.reshape(memories, (-1, self.embed_sz))
+        op_embedd = tf.matmul(op_embedd, self.R)
+        logits = tf.reshape(op_embedd, (-1, self.labels_dim))  # Shape: [batch_size*mask_dim, label_dim]
 
         return logits
+        
+
+
+
+        # Output Module 
+        # stacked_memories = tf.stack(memories, axis=1)
+        # op_embedd = tf.reduce_sum(tf.multiply(stacked_memories, self.output_w1), axis=[2]) # shape : [None, mem_slots]
+        # op_embedd = tf.matmul(op_embedd, self.H)
+        # logits = tf.matmul(op_embedd, self.R)
+        # logits = tf.reshape(logits, [-1, self.mask_dim, self.labels_dim])
+
+        # return logits
 
         # TODO : Change the model here
         # Generate Memory Scores
@@ -149,8 +165,12 @@ class EntityNetwork():
         """
         Build loss computation - softmax cross-entropy between logits, and correct answer. 
         """
+
+        ground_truth = tf.gather(self.ground_truth, self.mask_reshaped, axis=0)
+        logits = tf.gather(self.logits, self.mask_reshaped, axis=0)
+
         # TODO : Might have to implement my own loss
-        return tf.losses.sigmoid_cross_entropy(self.ground_truth, self.logits)
+        return tf.losses.sigmoid_cross_entropy(ground_truth, logits)
     
     def train(self):
         """
@@ -209,6 +229,7 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
         new_states = []
         for block_id, h in enumerate(state):
             # Gating Function
+            
             content_g = tf.reduce_sum(tf.multiply(inputs, h), axis=[1])                  # Shape: [bsz]
             address_g = tf.reduce_sum(tf.multiply(inputs, 
                                       tf.expand_dims(self.keys[block_id], 0)), axis=[1]) # Shape: [bsz]

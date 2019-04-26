@@ -4,7 +4,7 @@ run.py
 Core script for building, training, and evaluating a Recurrent Entity Network.
 """
 from model.entity_network import EntityNetwork
-from preprocessor.reader import parse
+from preprocessor.reader import parse, init_glove
 import datetime
 import os
 import pickle
@@ -12,10 +12,11 @@ import tensorflow as tf
 import tflearn
 import json
 
+
 FLAGS = tf.app.flags.FLAGS
 
-_DIR = "/home/nevronas/Projects/Personal-Projects/Dhruv/NeuralDialog-CVAE/data/commonsense/"
-_GLOVE_PATH = '/home/nevronas/word_embeddings/glove_twitter'
+_DIR = "/mnt/data/devamanyu/work/StoryCommonSense/storycommonsense_data/"
+_GLOVE_PATH = '/mnt/data/devamanyu/work/glove_twitter/'
 _EMB_DIM = 100
 _MAX_WLEN = 18
 _VOCAB = -1
@@ -23,7 +24,7 @@ _VOCAB = -1
 pickle_path = _DIR + "data.pkl"
 metadata_path = _DIR + "metadata.json"
 partition_path = _DIR + "storyid_partition.txt"
-annotation_path = _DIR + "json_version/annotations.json" 
+annotation_path = _DIR + "json_version/annotations.json"
 
 classes = ["joy", "trust", "fear", "surprise", "sadness", "disgust", "anger", "anticipation"]
 
@@ -33,7 +34,7 @@ classes = ["joy", "trust", "fear", "surprise", "sadness", "disgust", "anger", "a
 
 # Model Details
 tf.app.flags.DEFINE_integer("embedding_size", _EMB_DIM, "Dimensionality of word embeddings.")
-tf.app.flags.DEFINE_integer("memory_slots", 20, "Number of dynamic memory slots.")
+tf.app.flags.DEFINE_integer("memory_slots", 8, "Number of dynamic memory slots.")
 
 # Training Details
 tf.app.flags.DEFINE_integer("batch_size", 32, "Batch size for training/evaluating.")

@@ -236,9 +236,14 @@ def parse(load=True):
         test_data = pickle.load(file)
         file.close()
 
-    if(len(train_data) != 0 and len(test_data) != 0):
+    if(os.path.isfile(val_pickle_path) and load == True):
+        file = open(val_pickle_path, 'rb+')
+        val_data = pickle.load(file)
+        file.close()
+
+    if(len(train_data) != 0 and len(test_data) != 0 and len(val_data) != 0):
         print(train_data[0].shape, train_data[1].shape, train_data[2].shape, test_data[0].shape)
-        return train_data, test_data, None, None
+        return train_data, test_data, val_data
 
     data = {"train" : (), "test" :()}
     msl, mwl, mcl, mask_dim, labels_dim, embedding_dim = 0, 0, 0, 0, 0, _EMB_DIM
@@ -271,6 +276,13 @@ def parse(load=True):
         text_arr, all_labels, mask_arr = data[dtype]
         text_arr, all_labels, mask_arr = pad_stories(text_arr, all_labels, mask_arr, msl, mwl, mcl)
         data[dtype] = (text_arr, all_labels,  mask_arr)
+
+    nsamples = int(text_arr.shape[0] * 0.9)
+    data["val"] = (data["train"][0][nsamples:], data["train"][1][nsamples:], data["train"][2][nsamples:])
+    data["train"] = (data["train"][0][:nsamples], data["train"][1][:nsamples], data["train"][2][:nsamples])
+
+    for dtype in data.keys():
+        text_arr, all_labels, mask_arr = data[dtype]
         print(text_arr.shape, all_labels.shape, mask_arr.shape)
 
     with open(metadata_path, 'w') as f:
@@ -292,7 +304,10 @@ def parse(load=True):
     with open(test_pickle_path, "wb+") as handle:
         pickle.dump(data["test"], handle)
 
-    return data["train"], data["test"], None, None # TODO : Change this
+    with open(val_pickle_path, "wb+") as handle:
+        pickle.dump(data["val"], handle)
+
+    return data["train"], data["test"], data["val"] # TODO : Change this
 
 def tokenize(sentence):
     """
@@ -301,4 +316,4 @@ def tokenize(sentence):
     return [token.strip().lower() for token in re.split(SPLIT_RE, sentence) if token.strip()]
 
 if __name__ == '__main__':
-    parse()
+    parse(load=False)

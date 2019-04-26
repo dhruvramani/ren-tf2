@@ -11,6 +11,7 @@ import pickle
 import tensorflow as tf
 import tflearn
 import json
+from sklearn.metrics import precision_score, recall_score, f1_score
 
 
 FLAGS = tf.app.flags.FLAGS
@@ -50,7 +51,15 @@ tf.app.flags.DEFINE_float("clip_gradients", 40.0, 'Norm to clip gradients to.')
 tf.app.flags.DEFINE_integer("validate_every", 10, "Validate every validate_every epochs.")
 tf.app.flags.DEFINE_float("validation_threshold", .95, "Validation threshold for early stopping.")
 
-def main(load=False):
+def metrics(logits, truth):
+    logits[logits > 0.5] = 1
+    logits[logits < 0.5] = 1
+    prec = precision_score(truth, logits, average='macro')
+    recall = recall_score(truth, logits, average='macro')
+    fscore = f1_score(truth, logits, average='macro')
+    return fscore, prec, recall
+
+def main(load=True):
     # Get Vectorized Forms of Stories, Questions, and Answers
     train, test, val = parse()
     train_text_arr, train_all_labels, train_mask_arr = train
@@ -95,10 +104,11 @@ def main(load=False):
         for epoch in range(curr_epoch, FLAGS.num_epochs):
             loss, f1, prec, recall, counter = 0.0, 0.0, 0.0, 0.0, 0
             for start, end in zip(range(0, n, bsz), range(bsz, n, bsz)):
-                curr_loss, curr_f1, curr_prec, curr_rec, _ = sess.run([entity_net.loss_val, entity_net.f1, entity_net.precision, entity_net.recall, entity_net.train_op], # = [] 
+                curr_loss, ground_truth, logits, _ = sess.run([entity_net.loss_val, entity_net.ground_truth, tf.nn.sigmoid(entity_net.logits), entity_net.train_op], # = [] 
                                                   feed_dict={entity_net.S: train_text_arr[start:end], 
                                                              entity_net.labels: train_all_labels[start:end],
                                                              entity_net.mask: train_mask_arr[start:end]})
+                curr_f1, curr_prec, curr_rec = metrics(logits, ground_truth)
                 loss, f1, prec, recall, counter = loss + curr_loss, f1 + curr_f1, prec + curr_prec, recall + curr_rec, counter + 1
                 print("Epoch %d\tBatch %d \t Train Loss: %.3f \t Train Metrics [F, P, R] : %.3f, %.3f, %.3f" % (epoch, counter, loss / float(counter), f1 / float(counter), prec / float(counter), recall / float(counter)), end="\r")
                 if counter % 100 == 0:
@@ -145,10 +155,11 @@ def do_eval(n, bsz, sess, entity_net, text_arr, labels, mask):
     """Perform an Evaluation Epoch on the Given Data"""
     eval_loss, eval_f1, eval_prec, eval_recall, eval_counter = 0.0, 0.0, 0.0, 0.0, 0
     for start, end in zip(range(0, n, bsz), range(bsz, n, bsz)):
-        curr_eval_loss, cf1, cpr, cre = sess.run([entity_net.loss_val, entity_net.f1, entity_net.precision, entity_net.recall],
+        curr_eval_loss, ground_truth, logits = sess.run([entity_net.loss_val, entity_net.ground_truth, tf.nn.sigmoid(entity_net.logits)],
                                                  feed_dict={entity_net.S: text_arr[start:end],
                                                             entity_net.labels: labels[start:end],
                                                             entity_net.mask: mask[start:end]})
+        cf1, cpr, cre = metrics(logits, ground_truth)
         eval_loss, eval_f1, eval_prec, eval_recall, eval_counter = eval_loss + curr_eval_loss, eval_f1 + cf1, eval_prec + cpr, eval_recall + cre, eval_counter + 1
     return eval_loss / float(eval_counter), [eval_f1 / float(eval_counter), eval_prec / float(eval_counter), eval_recall / float(eval_counter)]
     

@@ -70,7 +70,7 @@ class EntityNetwork():
 
         # Create operations for computing the accuracy
         #correct_prediction = tf.equal(tf.argmax(self.logits, 1), self.A)
-        self.f1, self.precision, self.recall =  self.accuracy()
+        #self.f1, self.precision, self.recall =  self.accuracy()
     
     def instantiate_weights(self):
         """
@@ -165,22 +165,20 @@ class EntityNetwork():
         """
         Build loss computation - softmax cross-entropy between logits, and correct answer. 
         """
-
         ground_truth = tf.gather(self.ground_truth, self.mask_reshaped, axis=0)
         logits = tf.gather(self.logits, self.mask_reshaped, axis=0)
-
         # TODO : Might have to implement my own loss
         return tf.losses.sigmoid_cross_entropy(ground_truth, logits)
-
+    '''
     def accuracy(self):
-        ground_truth = tf.gather(self.ground_truth, self.mask_reshaped, axis=0)
-        logits = tf.nn.sigmoid(tf.gather(self.logits, self.mask_reshaped, axis=0))
+        #ground_truth = tf.gather(self.ground_truth, self.mask_reshaped, axis=0)
+        #logits = tf.nn.sigmoid(tf.gather(self.logits, self.mask_reshaped, axis=0))
 
-        f1_score = tf.contrib.metrics.f1_score(labels=ground_truth, predictions=logits)
-        precision = tf.metrics.precision(labels=ground_truth, predictions=logits)
-        recall = tf.metrics.recall(labels=ground_truth, predictions=logits)
+        f1_score = tf.contrib.metrics.f1_score(labels=self.ground_truth, predictions=self.logits)
+        precision = tf.metrics.precision(labels=self.ground_truth, predictions=self.logits)
+        recall = tf.metrics.recall(labels=self.ground_truth, predictions=self.logits)
         return f1_score[0], precision[0], recall[0]
-    
+    '''
     def train(self):
         """
         Build ADAM Optimizer Training Operation.

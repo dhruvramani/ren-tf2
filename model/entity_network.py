@@ -43,11 +43,8 @@ class EntityNetwork():
         # Setup Placeholders
         self.S = tf.placeholder(tf.float32, [None, self.story_len, self.sentence_len, self.embed_sz], name="Story")
         #self.S_len = tf.placeholder(tf.int32, [None], name="Story_Length")
-        self.labels = tf.placeholder(tf.float32, [None, self.mask_dim, self.labels_dim], name="Labels")
-        self.mask = tf.placeholder(tf.int32, [None, self.mask_dim, 1], name="Mask")
-
-        self.ground_truth = tf.reshape(self.labels, (-1, self.labels_dim))
-        self.mask_reshaped = tf.reshape(self.mask, (-1,1))
+        self.labels = tf.placeholder(tf.float32, [None, self.labels_dim], name="Labels")
+        self.mask = tf.placeholder(tf.int32, [None], name="Mask")
 
 
         # Setup Global, Epoch Step 
@@ -61,6 +58,10 @@ class EntityNetwork():
 
         # Build Inference Pipeline
         self.logits = self.inference()
+
+        self.ground_truth = tf.gather(self.labels, self.mask, axis=0)
+        self.logits = tf.gather(self.logits, self.mask, axis=0)
+
 
         # Build Loss Computation
         self.loss_val = self.loss()
@@ -165,10 +166,9 @@ class EntityNetwork():
         """
         Build loss computation - softmax cross-entropy between logits, and correct answer. 
         """
-        ground_truth = tf.gather(self.ground_truth, self.mask_reshaped, axis=0)
-        logits = tf.gather(self.logits, self.mask_reshaped, axis=0)
+        
         # TODO : Might have to implement my own loss
-        return tf.losses.sigmoid_cross_entropy(ground_truth, logits)
+        return tf.losses.sigmoid_cross_entropy(self.ground_truth, self.logits)
     '''
     def accuracy(self):
         #ground_truth = tf.gather(self.ground_truth, self.mask_reshaped, axis=0)

@@ -18,10 +18,10 @@ PAD_ID = 0
 SPLIT_RE = re.compile('(\W+)?')
 DATA_TYPES = ['train', 'valid', 'test']
 
-_DIR = "/home/nevronas/Projects/Personal-Projects/Dhruv/NeuralDialog-CVAE/data/commonsense/"
-_GLOVE_PATH = '/home/nevronas/word_embeddings/glove_twitter'
-#_DIR = "/mnt/data/devamanyu/work/StoryCommonSense/storycommonsense_data/"
-#_GLOVE_PATH = '/mnt/data/devamanyu/work/glove_twitter'
+# _DIR = "/home/nevronas/Projects/Personal-Projects/Dhruv/NeuralDialog-CVAE/data/commonsense/"
+# _GLOVE_PATH = '/home/nevronas/word_embeddings/glove_twitter'
+_DIR = "/mnt/data/devamanyu/work/StoryCommonSense/storycommonsense_data/"
+_GLOVE_PATH = '/mnt/data/devamanyu/work/glove_twitter'
 _EMB_DIM = 100
 _MAX_WLEN = 18
 _VOCAB = -1
@@ -277,9 +277,12 @@ def parse(load=True):
         text_arr, all_labels, mask_arr = pad_stories(text_arr, all_labels, mask_arr, msl, mwl, mcl)
         data[dtype] = (text_arr, all_labels,  mask_arr)
 
-    nsamples = int(text_arr.shape[0] * 0.9)
-    data["val"] = (data["train"][0][nsamples:], data["train"][1][nsamples:], data["train"][2][nsamples:])
-    data["train"] = (data["train"][0][:nsamples], data["train"][1][:nsamples], data["train"][2][:nsamples])
+    nsamples = int(text_arr.shape[0] * 0.8)
+    idx = [i for i in range(text_arr.shape[0])]
+    np.random.shuffle(idx)
+
+    data["val"] = (data["train"][0][idx[nsamples:]], data["train"][1][idx[nsamples:]], data["train"][2][idx[nsamples:]])
+    data["train"] = (data["train"][0][idx[:nsamples]], data["train"][1][idx[:nsamples]], data["train"][2][idx[:nsamples]])
 
     for dtype in data.keys():
         text_arr, all_labels, mask_arr = data[dtype]

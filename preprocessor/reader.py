@@ -18,10 +18,10 @@ PAD_ID = 0
 SPLIT_RE = re.compile('(\W+)?')
 DATA_TYPES = ['train', 'valid', 'test']
 
-# _DIR = "/home/nevronas/Projects/Personal-Projects/Dhruv/NeuralDialog-CVAE/data/commonsense/"
-# _GLOVE_PATH = '/home/nevronas/word_embeddings/glove_twitter'
-_DIR = "/mnt/data/devamanyu/work/StoryCommonSense/storycommonsense_data/"
-_GLOVE_PATH = '/mnt/data/devamanyu/work/glove_twitter'
+_DIR = "/home/nevronas/Projects/Personal-Projects/Dhruv/NeuralDialog-CVAE/data/commonsense/"
+_GLOVE_PATH = '/home/nevronas/word_embeddings/glove_twitter'
+#_DIR = "/mnt/data/devamanyu/work/StoryCommonSense/storycommonsense_data/"
+#_GLOVE_PATH = '/mnt/data/devamanyu/work/glove_twitter'
 _EMB_DIM = 100
 _MAX_WLEN = 18
 _VOCAB = -1

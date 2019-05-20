@@ -130,7 +130,7 @@ def main(load=True):
                 [y_true.append(label) for label in ground_truth]
                 [y_pred.append(label) for label in predictions]
 
-                tqdm.write(f'Epoch: {epoch+1}, iter {batch_i}: loss = {np.mean(train_loss):.3f}')
+                tqdm.write(f"Epoch: {epoch + 1}, iter {batch_i}: loss = {np.mean(train_loss):.3f}")
 
 
 

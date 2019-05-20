@@ -130,16 +130,14 @@ def main(load=True):
                 [y_true.append(label) for label in ground_truth]
                 [y_pred.append(label) for label in predictions]
 
-                tqdm.write(f"Epoch: {epoch + 1}, iter {batch_i}: loss = {np.mean(train_loss):.3f}")
-
-
+                tqdm.write("Epoch: {}, iter {}: loss = {:.3f}".format(epoch + 1, batch_i, np.mean(train_loss)))
 
             # Add train loss, train metric to data
             train_loss, train_metric = np.mean(train_loss), precision_recall_fscore_support(np.array(y_true), np.array(y_pred), average="micro")[:3]
             train_loss_history[epoch] = train_loss
             train_metric_history[epoch] = train_metric
 
-            tqdm.write(f"Train loss: {train_loss:.3f}   ;   [P, R, F-score]: {train_metric}"  )
+            tqdm.write("Train loss: {:.3f}   ;   [P, R, F-score]: {}".format(train_loss, train_metric))
 
             # Increment Epoch
             sess.run(entity_net.epoch_increment)
@@ -150,7 +148,7 @@ def main(load=True):
                 
                 
                 # Add val loss, val acc to data 
-                tqdm.write(f"Val loss: {val_loss:.3f}   ;   [P, R, F-score]: {val_metric}"  )
+                tqdm.write("Val loss: {:.3f}   ;   [P, R, F-score]: {}".format(val_loss, val_metric))
                 val_loss_history[epoch] = val_loss
                 val_metric_history[epoch] = val_metric
 
@@ -161,7 +159,7 @@ def main(load=True):
                     best_val_metric = val_metric
                     best_val_epoch = epoch
                     test_loss, test_metric = do_eval(test_n, eval_bsz, sess, entity_net, test_text_arr, test_all_labels, test_mask_arr)
-                    tqdm.write(f"Test loss: {test_loss}   ;   [P, R, F-score]: {test_metric}"  )
+                    tqdm.write("Test loss: {}   ;   [P, R, F-score]: {}".format(test_loss, test_metric))
 
 
                 # Save Model
@@ -180,8 +178,8 @@ def main(load=True):
         print([val_loss_history[epoch] for epoch in range(FLAGS.num_epochs)])
 
         # Test Loop
-        tqdm.write(f"Best Val loss: {best_val_loss}   ;   [P, R, F-score]: {best_val_metric}   ;   Best val epoch: {best_val_epoch}"  )
-        tqdm.write(f"Test loss: {test_loss}   ;   [P, R, F-score]: {test_metric}"  )
+        tqdm.write("Best Val loss: {}   ;   [P, R, F-score]: {}   ;   Best val epoch: {}".format(best_val_loss, best_val_metric, best_val_epoch))
+        tqdm.write("Test loss: {}   ;   [P, R, F-score]: {}".format(test_loss, test_metric))
         
 
 def do_eval(n, bsz, sess, entity_net, text_arr, labels, mask):

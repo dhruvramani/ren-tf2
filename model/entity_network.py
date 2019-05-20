@@ -127,7 +127,7 @@ class EntityNetwork():
         stacked_memories = tf.stack(memory_traces, axis=2)
         memories = tf.reshape(stacked_memories, (-1, self.mask_dim, self.embed_sz))
         
-        print(memories.get_shape().as_list(), self.keys.get_shape().as_list(), story_embeddings.get_shape().as_list())
+        print(memories.get_shape().as_list(), len(self.keys), self.keys[0].get_shape().as_list(), story_embeddings.get_shape().as_list())
         # map each memory output into label_dim
         op_embedd = tf.reshape(memories, (-1, self.embed_sz))
         op_embedd = tf.matmul(op_embedd, self.R)

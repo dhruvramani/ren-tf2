@@ -123,11 +123,11 @@ class EntityNetwork():
         # Send Story through Memory Cell
         initial_state = self.cell.zero_state(self.bsz, dtype=tf.float32)
         memory_traces, memories = tf.nn.dynamic_rnn(self.cell, story_embeddings, initial_state=initial_state) # sequence_length=self.story_len,
-        
+        print(memories.get_shape().as_list(), len(self.keys), self.keys[0].get_shape().as_list(), story_embeddings.get_shape().as_list())
         stacked_memories = tf.stack(memory_traces, axis=2)
         memories = tf.reshape(stacked_memories, (-1, self.mask_dim, self.embed_sz))
         
-        print(memories.get_shape().as_list(), len(self.keys), self.keys[0].get_shape().as_list(), story_embeddings.get_shape().as_list())
+        # [237, 40, 100] 8 [100] [None, 5, 100]
         # map each memory output into label_dim
         op_embedd = tf.reshape(memories, (-1, self.embed_sz))
         op_embedd = tf.matmul(op_embedd, self.R)

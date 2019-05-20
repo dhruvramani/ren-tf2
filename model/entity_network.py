@@ -91,7 +91,10 @@ class EntityNetwork():
         # Create Memory Cell Keys [IF DESIRED - TIE KEYS HERE]
         self.keys = [tf.get_variable("Key_%d" % i, [self.embed_sz], initializer=self.init) 
                          for i in range(self.memory_slots)]
-        
+        #self.AWq = tf.get_variable("Attention_Query", [], initializer=self.init)
+        #self.AWk = tf.get_variable("Attention_Keys", [], initializer=self.init)
+        #self.AWv = tf.get_variable("Attention_Value", [], initializer=self.init)
+        #self.AW_o = tf.get_variable("Attention_OP", [], initializer=self.init)
         # Create Memory Cell
         self.cell = DynamicMemory(self.memory_slots, self.embed_sz, self.keys)
 
@@ -99,6 +102,8 @@ class EntityNetwork():
         # TODO : SEE WHAT TO DO WITH THIS - Output Module Variables
         # self.H = tf.get_variable("H", [self.embed_sz, self.embed_sz], initializer=self.init) # TODO debug shape here
         self.R = tf.get_variable("R", [self.embed_sz, self.labels_dim], initializer=self.init) # TODO : Bring it to [None, mask_dim, labels_dim]
+
+    #def attention(self, memories, keys, story_embeddings):
 
     def inference(self):
         """
@@ -122,6 +127,7 @@ class EntityNetwork():
         stacked_memories = tf.stack(memory_traces, axis=2)
         memories = tf.reshape(stacked_memories, (-1, self.mask_dim, self.embed_sz))
         
+        print(memories.get_shape().as_list(), self.keys.get_shape().as_list(), story_embeddings.get_shape().as_list())
         # map each memory output into label_dim
         op_embedd = tf.reshape(memories, (-1, self.embed_sz))
         op_embedd = tf.matmul(op_embedd, self.R)

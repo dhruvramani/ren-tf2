@@ -262,8 +262,9 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
                 attent = tf.multiply(h_component, soft)
                 attentshape = attent.get_shape().as_list()
                 attent = tf.reshape(attent, [attentshape[0] * attentshape[1], attentshape[2]])
-                attent = tf.multiply(self.AttentW, attent)
+                attent = tf.matmul(self.AttentW, attent)
                 print(attent.get_shape().as_list())
+                new_states.append(attent)
             else:
                 h_component = tf.matmul(h, self.U)                                           # Shape: [bsz, mem_sz]
                 candidate = self.activation(h_component + w_component + s_component)         # Shape: [bsz, mem_sz]

@@ -248,7 +248,7 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
             s_component = tf.matmul(inputs, self.W)                                      # Shape: [bsz, mem_sz]
             candidate = self.activation(h_component + w_component + s_component)         # Shape: [bsz, mem_sz]
 
-            all_h = torch.stack(state)
+            all_h = tf.stack(state)
             print(all_h.get_shape().as_list())
 
             # Gating Function

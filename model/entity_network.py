@@ -215,12 +215,12 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
         self.U = None
         if(self.attention):
             self.U = tf.get_variable("U", [237, self.mem_sz], initializer=self.init)
+            self.AttentW = tf.get_variable("AttentW", [self.m, self.m * self.mem_sz], initializer=self.init)
         else:
             self.U = tf.get_variable("U", [self.mem_sz, self.mem_sz], initializer=self.init)
         self.V = tf.get_variable("V", [self.mem_sz, self.mem_sz], initializer=self.init)
         self.W = tf.get_variable("W", [self.mem_sz, self.mem_sz], initializer=self.init)
         #self.SoftAttenW = tf.get_variable("SoftAttenW", [237, self.mem_sz], initializer=self.init)
-        #self.AttentW = tf.get_variable("AttentW", [self.m, self.m * self.mem_sz], initializer=self.init)
     
     @property
     def state_size(self):
@@ -260,7 +260,10 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
                 d_k = tf.cast(tf.shape(w_component)[-1], dtype=tf.float32)
                 soft = tf.nn.softmax(tf.matmul(s_component, tf.transpose(w_component)) / d_k)
                 attent = tf.multiply(h_component, soft)
-                print(attent.get_shape().as_list(), self.m, self.mem_sz)
+                attentshape = attent.get_shape().as_list()
+                attent = tf.reshape(attent, [attentshape[0] * attentshape[1], attentshape[2]])
+                attent = tf.multiply(self.AttentW, attent)
+                print(attent.get_shape().as_list())
             else:
                 h_component = tf.matmul(h, self.U)                                           # Shape: [bsz, mem_sz]
                 candidate = self.activation(h_component + w_component + s_component)         # Shape: [bsz, mem_sz]
@@ -276,6 +279,6 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
                 # Unit Normalize State 
                 new_h_norm = tf.nn.l2_normalize(new_h, -1)                                   # Shape: [bsz, mem_sz]
             
-            new_states.append(new_h_norm)
+                new_states.append(new_h_norm)
         
         return new_states, new_states

@@ -211,7 +211,12 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
         self.attention = attention
 
         # Instantiate Dynamic Memory Parameters => CONSTRAIN HERE
-        self.U = tf.get_variable("U", [self.mem_sz, self.mem_sz], initializer=self.init)
+        # NOTE : Change dim back for not attention
+        self.U = None
+        if(self.attention):
+            self.U = tf.get_variable("U", [237, self.mem_sz], initializer=self.init)
+        else:
+            self.U = tf.get_variable("U", [self.mem_sz, self.mem_sz], initializer=self.init)
         self.V = tf.get_variable("V", [self.mem_sz, self.mem_sz], initializer=self.init)
         self.W = tf.get_variable("W", [self.mem_sz, self.mem_sz], initializer=self.init)
         #self.SoftAttenW = tf.get_variable("SoftAttenW", [237, self.mem_sz], initializer=self.init)
@@ -245,7 +250,6 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
         for block_id, h in enumerate(state):
 
             # New State Candidate
-            h_component = tf.matmul(h, self.U)                                           # Shape: [bsz, mem_sz]
             w_component = tf.matmul(tf.expand_dims(self.keys[block_id], 0), self.V)      # Shape: [1, mem_sz]
             s_component = tf.matmul(inputs, self.W)                                      # Shape: [bsz, mem_sz]
 
@@ -258,6 +262,7 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
                 attent = tf.multiply(h_component, soft)
                 print(attent.get_shape().as_list(), self.m, self.mem_sz)
             else:
+                h_component = tf.matmul(h, self.U)                                           # Shape: [bsz, mem_sz]
                 candidate = self.activation(h_component + w_component + s_component)         # Shape: [bsz, mem_sz]
                 # Gating Function            
                 content_g = tf.reduce_sum(tf.multiply(inputs, h), axis=[1])                  # Shape: [bsz]

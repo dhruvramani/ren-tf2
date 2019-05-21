@@ -103,8 +103,6 @@ class EntityNetwork():
         # self.H = tf.get_variable("H", [self.embed_sz, self.embed_sz], initializer=self.init) # TODO debug shape here
         self.R = tf.get_variable("R", [self.embed_sz, self.labels_dim], initializer=self.init) # TODO : Bring it to [None, mask_dim, labels_dim]
 
-    #def attention(self, memories, keys, story_embeddings):
-
     def inference(self):
         """
         Build inference pipeline, going from the story and question, through the memory cells, to the
@@ -123,10 +121,11 @@ class EntityNetwork():
         # Send Story through Memory Cell
         initial_state = self.cell.zero_state(self.bsz, dtype=tf.float32)
         memory_traces, memories = tf.nn.dynamic_rnn(self.cell, story_embeddings, initial_state=initial_state) # sequence_length=self.story_len,
-        print(memories.get_shape().as_list(), len(self.keys), self.keys[0].get_shape().as_list(), story_embeddings.get_shape().as_list())
+        
         stacked_memories = tf.stack(memory_traces, axis=2)
         memories = tf.reshape(stacked_memories, (-1, self.mask_dim, self.embed_sz))
         
+        #print(memories.get_shape().as_list(), len(self.keys), self.keys[0].get_shape().as_list(), story_embeddings.get_shape().as_list())
         # [237, 40, 100] 8 [100] [None, 5, 100]
         # map each memory output into label_dim
         op_embedd = tf.reshape(memories, (-1, self.embed_sz))
@@ -198,7 +197,7 @@ class EntityNetwork():
 
 class DynamicMemory(tf.contrib.rnn.RNNCell):
     def __init__(self, memory_slots, memory_size, keys, activation=prelu,
-                 initializer=tf.random_normal_initializer(stddev=0.1)):
+                 initializer=tf.random_normal_initializer(stddev=0.1), attention=False):
         """
         Instantiate a DynamicMemory Cell, with the given number of memory slots, and key vectors.
 
@@ -209,6 +208,7 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
         """ 
         self.m, self.mem_sz, self.keys = memory_slots, memory_size, keys
         self.activation, self.init = activation, initializer
+        self.attention = attention
 
         # Instantiate Dynamic Memory Parameters => CONSTRAIN HERE
         self.U = tf.get_variable("U", [self.mem_sz, self.mem_sz], initializer=self.init)
@@ -241,18 +241,22 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
         """
         new_states = []
         for block_id, h in enumerate(state):
-            # Gating Function
-            
-            content_g = tf.reduce_sum(tf.multiply(inputs, h), axis=[1])                  # Shape: [bsz]
-            address_g = tf.reduce_sum(tf.multiply(inputs, 
-                                      tf.expand_dims(self.keys[block_id], 0)), axis=[1]) # Shape: [bsz]
-            g = sigmoid(content_g + address_g)
 
             # New State Candidate
             h_component = tf.matmul(h, self.U)                                           # Shape: [bsz, mem_sz]
             w_component = tf.matmul(tf.expand_dims(self.keys[block_id], 0), self.V)      # Shape: [1, mem_sz]
             s_component = tf.matmul(inputs, self.W)                                      # Shape: [bsz, mem_sz]
             candidate = self.activation(h_component + w_component + s_component)         # Shape: [bsz, mem_sz]
+
+            all_h = torch.stack(state)
+            print(all_h.get_shape().as_list())
+
+            # Gating Function
+            
+            content_g = tf.reduce_sum(tf.multiply(inputs, h), axis=[1])                  # Shape: [bsz]
+            address_g = tf.reduce_sum(tf.multiply(inputs, 
+                                      tf.expand_dims(self.keys[block_id], 0)), axis=[1]) # Shape: [bsz]
+            g = sigmoid(content_g + address_g)
 
             # State Update
             new_h = h + tf.multiply(tf.expand_dims(g, -1), candidate)                    # Shape: [bsz, mem_sz]

@@ -215,7 +215,7 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
         self.U = None
         if(self.attention):
             self.U = tf.get_variable("U", [237, self.mem_sz], initializer=self.init)
-            self.AttentW = tf.get_variable("AttentW", [self.m, 1896], initializer=self.init)
+            self.AttentW = tf.get_variable("AttentW", [237, 1896], initializer=self.init)
         else:
             self.U = tf.get_variable("U", [self.mem_sz, self.mem_sz], initializer=self.init)
         self.V = tf.get_variable("V", [self.mem_sz, self.mem_sz], initializer=self.init)

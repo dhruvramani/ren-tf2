@@ -255,7 +255,7 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
 
             if(self.attention):
                 all_h = tf.stack(new_states[:block_id] + state[block_id:])
-                h_component = tf.matmul(all_h, self.U)
+                h_component = all_h * self.U
                 # V = h_component, Q = s_component, K = w_component
                 d_k = tf.cast(tf.shape(w_component)[-1], dtype=tf.float32)
                 soft = tf.nn.softmax(tf.matmul(s_component, tf.transpose(w_component)) / d_k)

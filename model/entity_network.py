@@ -91,10 +91,7 @@ class EntityNetwork():
         # Create Memory Cell Keys [IF DESIRED - TIE KEYS HERE]
         self.keys = [tf.get_variable("Key_%d" % i, [self.embed_sz], initializer=self.init) 
                          for i in range(self.memory_slots)]
-        #self.AWq = tf.get_variable("Attention_Query", [], initializer=self.init)
-        #self.AWk = tf.get_variable("Attention_Keys", [], initializer=self.init)
-        #self.AWv = tf.get_variable("Attention_Value", [], initializer=self.init)
-        #self.AW_o = tf.get_variable("Attention_OP", [], initializer=self.init)
+
         # Create Memory Cell
         self.cell = DynamicMemory(self.memory_slots, self.embed_sz, self.keys)
 
@@ -254,16 +251,15 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
             s_component = tf.matmul(inputs, self.W)                                      # Shape: [bsz, mem_sz]
 
             if(self.attention):
+                # V = h_component, Q = s_component, K = w_component
                 all_h = tf.stack(new_states[:block_id] + state[block_id:])
                 h_component = all_h * self.U
-                # V = h_component, Q = s_component, K = w_component
                 d_k = tf.cast(tf.shape(w_component)[-1], dtype=tf.float32)
                 soft = tf.nn.softmax(tf.matmul(s_component, tf.transpose(w_component)) / d_k)
                 attent = tf.multiply(h_component, soft)
                 attentshape = attent.get_shape().as_list()
                 attent = tf.reshape(attent, [attentshape[0] * attentshape[1], attentshape[2]])
                 attent = tf.matmul(self.AttentW, attent)
-                print(attent.get_shape().as_list())
                 new_states.append(attent)
             else:
                 h_component = tf.matmul(h, self.U)                                           # Shape: [bsz, mem_sz]

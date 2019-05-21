@@ -214,7 +214,7 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
         self.U = tf.get_variable("U", [self.mem_sz, self.mem_sz], initializer=self.init)
         self.V = tf.get_variable("V", [self.mem_sz, self.mem_sz], initializer=self.init)
         self.W = tf.get_variable("W", [self.mem_sz, self.mem_sz], initializer=self.init)
-        self.SoftAttenW = tf.get_variable("AttentW", [self.m, self.mem_sz], initializer=self.init)
+        self.SoftAttenW = tf.get_variable("SoftAttenW", [self.m, self.mem_sz], initializer=self.init)
         self.AttentW = tf.get_variable("AttentW", [self.m, self.m * self.mem_sz], initializer=self.init)
     
     @property

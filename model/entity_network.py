@@ -248,7 +248,6 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
             h_component = tf.matmul(h, self.U)                                           # Shape: [bsz, mem_sz]
             w_component = tf.matmul(tf.expand_dims(self.keys[block_id], 0), self.V)      # Shape: [1, mem_sz]
             s_component = tf.matmul(inputs, self.W)                                      # Shape: [bsz, mem_sz]
-            candidate = self.activation(h_component + w_component + s_component)         # Shape: [bsz, mem_sz]
 
             if(self.attention):
                 all_h = tf.stack(new_states[:block_id] + state[block_id:])
@@ -256,10 +255,10 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
                 # V = h_component, Q = s_component, K = w_component
                 d_k = tf.cast(tf.shape(w_component)[-1], dtype=tf.float32)
                 soft = tf.nn.softmax(tf.matmul(s_component, tf.transpose(w_component)) / d_k)
-                attent = tf.matmul(h_component, soft)
+                attent = tf.multiply(h_component, soft)
                 print(attent.get_shape().as_list(), self.m, self.mem_sz)
             else:
-
+                candidate = self.activation(h_component + w_component + s_component)         # Shape: [bsz, mem_sz]
                 # Gating Function            
                 content_g = tf.reduce_sum(tf.multiply(inputs, h), axis=[1])                  # Shape: [bsz]
                 address_g = tf.reduce_sum(tf.multiply(inputs, 

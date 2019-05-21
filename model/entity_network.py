@@ -253,7 +253,9 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
                 h_component = tf.matmul(all_h, self.U)
                 # V = h_component, Q = s_component, K = w_component
                 d_k = tf.cast(tf.shape(w_component)[-1], dtype=tf.float32)
-                attent = h_component * tf.nn.softmax(tf.matmul(s_component, tf.transpose(w_component)) / d_k)
+                soft = tf.nn.softmax(tf.matmul(s_component, tf.transpose(w_component)) / d_k)
+                soft = tf.expand_dims(soft, 2)
+                attent = h_component * soft
                 print(attent.get_shape().as_list())
             else:
 

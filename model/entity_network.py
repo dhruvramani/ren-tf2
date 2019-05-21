@@ -214,8 +214,8 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
         self.U = tf.get_variable("U", [237, self.mem_sz], initializer=self.init)
         self.V = tf.get_variable("V", [self.mem_sz, self.mem_sz], initializer=self.init)
         self.W = tf.get_variable("W", [self.mem_sz, self.mem_sz], initializer=self.init)
-        self.SoftAttenW = tf.get_variable("SoftAttenW", [237, self.mem_sz], initializer=self.init)
-        self.AttentW = tf.get_variable("AttentW", [self.m, self.m * self.mem_sz], initializer=self.init)
+        #self.SoftAttenW = tf.get_variable("SoftAttenW", [237, self.mem_sz], initializer=self.init)
+        #self.AttentW = tf.get_variable("AttentW", [self.m, self.m * self.mem_sz], initializer=self.init)
     
     @property
     def state_size(self):
@@ -255,7 +255,7 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
                 h_component = tf.matmul(all_h, self.U)
                 # V = h_component, Q = s_component, K = w_component
                 d_k = tf.cast(tf.shape(w_component)[-1], dtype=tf.float32)
-                soft = self.SoftAttenW * tf.nn.softmax(tf.matmul(s_component, tf.transpose(w_component)) / d_k)
+                soft = tf.nn.softmax(tf.matmul(s_component, tf.transpose(w_component)) / d_k)
                 attent = tf.matmul(h_component, soft)
                 print(attent.get_shape().as_list(), self.m, self.mem_sz)
             else:

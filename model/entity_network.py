@@ -211,7 +211,7 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
         self.attention = attention
 
         # Instantiate Dynamic Memory Parameters => CONSTRAIN HERE
-        self.U = tf.get_variable("U", [self.mem_sz, self.mem_sz], initializer=self.init)
+        self.U = tf.get_variable("U", [237, self.mem_sz], initializer=self.init)
         self.V = tf.get_variable("V", [self.mem_sz, self.mem_sz], initializer=self.init)
         self.W = tf.get_variable("W", [self.mem_sz, self.mem_sz], initializer=self.init)
         self.SoftAttenW = tf.get_variable("SoftAttenW", [237, self.mem_sz], initializer=self.init)

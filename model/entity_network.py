@@ -197,7 +197,7 @@ class EntityNetwork():
 
 class DynamicMemory(tf.contrib.rnn.RNNCell):
     def __init__(self, memory_slots, memory_size, keys, activation=prelu,
-                 initializer=tf.random_normal_initializer(stddev=0.1), attention=False):
+                 initializer=tf.random_normal_initializer(stddev=0.1), attention=True):
         """
         Instantiate a DynamicMemory Cell, with the given number of memory slots, and key vectors.
 
@@ -248,21 +248,27 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
             s_component = tf.matmul(inputs, self.W)                                      # Shape: [bsz, mem_sz]
             candidate = self.activation(h_component + w_component + s_component)         # Shape: [bsz, mem_sz]
 
-            all_h = tf.stack(state)
-            print(all_h.get_shape().as_list())
+            if(self.attention):
+                all_h = tf.stack(new_states[:block_id] + state[block_id:])
+                h_component = tf.matmul(all_h, self.U)
+                # V = h_component, Q = s_component, K = w_component
+                d_k = tf.cast(tf.shape(w_component)[-1], dtype=tf.float32)
+                attent = h_component * tf.nn.softmax(tf.matmul(s_component, tf.transpose(w_component)) / d_k)
+                print(attent.get_shape().as_list())
+            else:
 
-            # Gating Function
+                # Gating Function            
+                content_g = tf.reduce_sum(tf.multiply(inputs, h), axis=[1])                  # Shape: [bsz]
+                address_g = tf.reduce_sum(tf.multiply(inputs, 
+                                          tf.expand_dims(self.keys[block_id], 0)), axis=[1]) # Shape: [bsz]
+                g = sigmoid(content_g + address_g)
+
+                # State Update
+                new_h = h + tf.multiply(tf.expand_dims(g, -1), candidate)                    # Shape: [bsz, mem_sz]
+
+                # Unit Normalize State 
+                new_h_norm = tf.nn.l2_normalize(new_h, -1)                                   # Shape: [bsz, mem_sz]
             
-            content_g = tf.reduce_sum(tf.multiply(inputs, h), axis=[1])                  # Shape: [bsz]
-            address_g = tf.reduce_sum(tf.multiply(inputs, 
-                                      tf.expand_dims(self.keys[block_id], 0)), axis=[1]) # Shape: [bsz]
-            g = sigmoid(content_g + address_g)
-
-            # State Update
-            new_h = h + tf.multiply(tf.expand_dims(g, -1), candidate)                    # Shape: [bsz, mem_sz]
-
-            # Unit Normalize State 
-            new_h_norm = tf.nn.l2_normalize(new_h, -1)                                   # Shape: [bsz, mem_sz]
             new_states.append(new_h_norm)
         
         return new_states, new_states

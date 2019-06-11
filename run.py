@@ -94,6 +94,8 @@ def main(load=True):
     test_text_arr, test_all_labels, test_mask_arr, _, _ = test
 
     adj_bias = adj_to_bias(adj_m, adj_m.shape[0], nhood=1)
+    labels_embedding = labels_embedding[np.newaxis]
+    adj_bias = adj_bias[np.newaxis]
 
     # Setup Checkpoint + Log Paths
     ckpt_dir = "./checkpoints/"

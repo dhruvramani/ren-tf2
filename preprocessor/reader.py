@@ -168,8 +168,8 @@ def create_dataset(data_type="train"):
     labels_embedding = np.asarray([glove.get(label, glove['unk']) for label in classes])
     adj_m = np.zeros((len(classes), len(classes)))
 
-    for i in range(all_labels.shape[0]):
-        for j in range(all_labels.shape[1]):
+    for i in range(len(all_labels)):
+        for j in range(all_labels[i].shape[0]):
             idx = np.where(all_labels[i][j] > 0)
             adj_m[idx] += all_labels[i][j]
 

@@ -31,7 +31,7 @@ test_pickle_path = _DIR + "test_data.pkl"
 val_pickle_path = _DIR + "val_data.pkl"
 partition_path = _DIR + "storyid_partition.txt"
 metadata_path = _DIR + "metadata.json"
-annotation_path = _DIR + "json_version/annotations.json" 
+annotation_path = _DIR + "json_version/annotations.json"
 
 classes = ["joy", "trust", "fear", "surprise", "sadness", "disgust", "anger", "anticipation"]
 
@@ -165,7 +165,20 @@ def create_dataset(data_type="train"):
             # OR - decide
             #stories_dat.append((embeddings, labels, mask, c_dim))
 
-    return text_arr, all_labels, mask_arr, char_arr # stories_dat # - ALL ARE LISTS
+    labels_embedding = np.asarray([glove.get(label, glove['unk']) for label in classes])
+    adj_m = np.zeros((len(classes), len(classes)))
+
+    for i in range(all_labels.shape[0]):
+        for j in range(all_labels.shape[1]):
+            idx = np.where(all_labels[i][j] > 0)
+            adj_m[idx] += all_labels[i][j]
+
+    for i in range(adj_m.shape[0]):
+        adj_m[i] /= adj_m[i][i]
+
+    # Process more as in the paper
+
+    return text_arr, all_labels, mask_arr, char_arr, labels_embedding, adj_m # stories_dat # - ALL ARE LISTS
 
 def pad_stories(text_arr, all_labels, mask_arr, max_sentence_length, max_word_length, max_char_length):
     
@@ -223,7 +236,7 @@ def pad_stories(text_arr, all_labels, mask_arr, max_sentence_length, max_word_le
     mask_arr = np.expand_dims(mask_arr, 2)
     return text_arr, all_labels, mask_arr
 
-def parse(load=True):
+def parse(load=True, adj_threshold=0.3):
     train_data, test_data, val_data = (), (), ()
     
     if(os.path.isfile(train_pickle_path) and load == True):
@@ -249,7 +262,7 @@ def parse(load=True):
     msl, mwl, mcl, mask_dim, labels_dim, embedding_dim = 0, 0, 0, 0, 0, _EMB_DIM
 
     for dtype in data.keys():
-        text_arr, all_labels, mask_arr, char_arr = create_dataset(data_type=dtype)
+        text_arr, all_labels, mask_arr, char_arr, labels_embedding, adj_m = create_dataset(data_type=dtype)
     
         dataset_size = len(text_arr)
         sentence_lengths = [story.shape[0] for story in text_arr]
@@ -268,24 +281,28 @@ def parse(load=True):
 
         _, labels_dim = len(all_labels[0]), len(all_labels[0][0])
         mask_dim = max_sentence_length*max_char_length
-        data[dtype] = (text_arr, all_labels,  mask_arr)
+        data[dtype] = (text_arr, all_labels,  mask_arr, labels_embedding, adj_m)
         # TODO : MOVE
     print(msl, mwl, mcl)  
 
     for dtype in data.keys():
-        text_arr, all_labels, mask_arr = data[dtype]
+        text_arr, all_labels, mask_arr, labels_embedding, adj_m = data[dtype]
         text_arr, all_labels, mask_arr = pad_stories(text_arr, all_labels, mask_arr, msl, mwl, mcl)
-        data[dtype] = (text_arr, all_labels,  mask_arr)
+        data[dtype] = (text_arr, all_labels,  mask_arr, labels_embedding, adj_m)
 
     nsamples = int(text_arr.shape[0] * 0.8)
     idx = [i for i in range(text_arr.shape[0])]
     np.random.shuffle(idx)
 
-    data["val"] = (data["train"][0][idx[nsamples:]], data["train"][1][idx[nsamples:]], data["train"][2][idx[nsamples:]])
-    data["train"] = (data["train"][0][idx[:nsamples]], data["train"][1][idx[:nsamples]], data["train"][2][idx[:nsamples]])
+    adj_m = (data["train"][4] + data["test"][4]) / 2.0 # NOTE : @devamanyu - should we go with this?
+    adj_m[adj_m >= adj_threshold] = 1
+    adj_m[adj_m < adj_threshold] = 0
+
+    data["val"] = (data["train"][0][idx[nsamples:]], data["train"][1][idx[nsamples:]], data["train"][2][idx[nsamples:]], data["train"][3], adj_m)
+    data["train"] = (data["train"][0][idx[:nsamples]], data["train"][1][idx[:nsamples]], data["train"][2][idx[:nsamples]], data["test"][3], adj_m)
 
     for dtype in data.keys():
-        text_arr, all_labels, mask_arr = data[dtype]
+        text_arr, all_labels, mask_arr, _, _ = data[dtype]
         print(text_arr.shape, all_labels.shape, mask_arr.shape)
 
     with open(metadata_path, 'w') as f:
@@ -319,4 +336,4 @@ def tokenize(sentence):
     return [token.strip().lower() for token in re.split(SPLIT_RE, sentence) if token.strip()]
 
 if __name__ == '__main__':
-    parse(load=False)
+    parse(load=False, adj_threshold=0.3)

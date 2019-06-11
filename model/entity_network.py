@@ -46,6 +46,8 @@ class EntityNetwork():
         self.labels = tf.placeholder(tf.float32, [None, self.labels_dim], name="Labels")
         self.mask = tf.placeholder(tf.int32, [None], name="Mask")
 
+        self.labels_embedding = tf.placeholder(tf.float32, [self.labels_dim, self.embed_sz], name="LabelEmbeds")
+        self.bias_adj = tf.placeholder(tf.float32, [self.labels_dim, self.labels_dim], name="Adjacency")
 
         # Setup Global, Epoch Step 
         self.global_step = tf.Variable(0, trainable=False, name="Global_Step")
@@ -127,7 +129,10 @@ class EntityNetwork():
         # map each memory output into label_dim
         op_embedd = tf.reshape(memories, (-1, self.embed_sz))
         op_embedd = tf.matmul(op_embedd, self.R)
-        logits = tf.reshape(op_embedd, (-1, self.labels_dim))  # Shape: [batch_size*mask_dim, label_dim]
+        logits = tf.reshape(op_embedd, (-1, self.labels_dim))  # Shape: [batch_size * mask_dim, label_dim]
+        gat_logits = self.gat_main(self.labels_embedding, self.bias_adj, hid_units=[50], n_heads=[8, 1], nb_classes=self.labels_dim) # Shape : [labels_dim, labels_dim]
+
+        logits = tf.matmul(logits, gat_logits)
 
         return logits
         
@@ -191,6 +196,62 @@ class EntityNetwork():
                                                    learning_rate=learning_rate, optimizer="Adam",
                                                    clip_gradients=self.clip_gradients)
         return train_op
+
+    def gat_main(inputs, bias_mat, hid_units, n_heads, nb_classes, attn_drop=0.6, ffd_drop=0.6, activation=tf.nn.elu, residual=False):
+        attns = []
+        for _ in range(n_heads[0]):
+            attns.append(gat_attn_head(inputs, bias_mat=bias_mat,
+                out_sz=hid_units[0], activation=activation,
+                in_drop=ffd_drop, coef_drop=attn_drop, residual=False))
+        h_1 = tf.concat(attns, axis=-1)
+        for i in range(1, len(hid_units)):
+            h_old = h_1
+            attns = []
+            for _ in range(n_heads[i]):
+                attns.append(gat_attn_head(h_1, bias_mat=bias_mat,
+                    out_sz=hid_units[i], activation=activation,
+                    in_drop=ffd_drop, coef_drop=attn_drop, residual=residual))
+            h_1 = tf.concat(attns, axis=-1)
+        out = []
+        for i in range(n_heads[-1]):
+            out.append(gat_attn_head(h_1, bias_mat=bias_mat,
+                out_sz=nb_classes, activation=lambda x: x,
+                in_drop=ffd_drop, coef_drop=attn_drop, residual=False))
+        logits = tf.add_n(out) / n_heads[-1]
+
+        return logits
+
+
+    def gat_attn_head(seq, out_sz, bias_mat, activation, in_drop=0.0, coef_drop=0.0, residual=False):
+        # Source : https://github.com/PetarV-/GAT/blob/master/utils/layers.py
+        with tf.name_scope('my_attn'):
+            if in_drop != 0.0:
+                seq = tf.nn.dropout(seq, 1.0 - in_drop)
+
+            seq_fts = tf.layers.conv1d(seq, out_sz, 1, use_bias=False)
+
+            # simplest self-attention possible
+            f_1 = tf.layers.conv1d(seq_fts, 1, 1)
+            f_2 = tf.layers.conv1d(seq_fts, 1, 1)
+            logits = f_1 + tf.transpose(f_2, [0, 2, 1])
+            coefs = tf.nn.softmax(tf.nn.leaky_relu(logits) + bias_mat)
+
+            if coef_drop != 0.0:
+                coefs = tf.nn.dropout(coefs, 1.0 - coef_drop)
+            if in_drop != 0.0:
+                seq_fts = tf.nn.dropout(seq_fts, 1.0 - in_drop)
+
+            vals = tf.matmul(coefs, seq_fts)
+            ret = tf.contrib.layers.bias_add(vals)
+
+            # residual connection
+            if residual:
+                if seq.shape[-1] != ret.shape[-1]:
+                    ret = ret + conv1d(seq, ret.shape[-1], 1) # activation
+                else:
+                    ret = ret + seq
+
+            return activation(ret)  # activation
 
 class DynamicMemory(tf.contrib.rnn.RNNCell):
     def __init__(self, memory_slots, memory_size, keys, activation=prelu,

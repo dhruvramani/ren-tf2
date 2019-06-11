@@ -197,10 +197,10 @@ class EntityNetwork():
                                                    clip_gradients=self.clip_gradients)
         return train_op
 
-    def gat_main(inputs, bias_mat, hid_units, n_heads, nb_classes, attn_drop=0.6, ffd_drop=0.6, activation=tf.nn.elu, residual=False):
+    def gat_main(self, inputs, bias_mat, hid_units, n_heads, nb_classes, attn_drop=0.6, ffd_drop=0.6, activation=tf.nn.elu, residual=False):
         attns = []
         for _ in range(n_heads[0]):
-            attns.append(gat_attn_head(inputs, bias_mat=bias_mat,
+            attns.append(self.gat_attn_head(inputs, bias_mat=bias_mat,
                 out_sz=hid_units[0], activation=activation,
                 in_drop=ffd_drop, coef_drop=attn_drop, residual=False))
         h_1 = tf.concat(attns, axis=-1)
@@ -208,13 +208,13 @@ class EntityNetwork():
             h_old = h_1
             attns = []
             for _ in range(n_heads[i]):
-                attns.append(gat_attn_head(h_1, bias_mat=bias_mat,
+                attns.append(self.gat_attn_head(h_1, bias_mat=bias_mat,
                     out_sz=hid_units[i], activation=activation,
                     in_drop=ffd_drop, coef_drop=attn_drop, residual=residual))
             h_1 = tf.concat(attns, axis=-1)
         out = []
         for i in range(n_heads[-1]):
-            out.append(gat_attn_head(h_1, bias_mat=bias_mat,
+            out.append(self.gat_attn_head(h_1, bias_mat=bias_mat,
                 out_sz=nb_classes, activation=lambda x: x,
                 in_drop=ffd_drop, coef_drop=attn_drop, residual=False))
         logits = tf.add_n(out) / n_heads[-1]
@@ -222,7 +222,7 @@ class EntityNetwork():
         return logits
 
 
-    def gat_attn_head(seq, out_sz, bias_mat, activation, in_drop=0.0, coef_drop=0.0, residual=False):
+    def gat_attn_head(self, seq, out_sz, bias_mat, activation, in_drop=0.0, coef_drop=0.0, residual=False):
         # Source : https://github.com/PetarV-/GAT/blob/master/utils/layers.py
         with tf.name_scope('my_attn'):
             if in_drop != 0.0:

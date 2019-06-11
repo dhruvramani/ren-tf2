@@ -298,6 +298,8 @@ def parse(load=True, adj_threshold=0.3):
     adj_m[adj_m >= adj_threshold] = 1
     adj_m[adj_m < adj_threshold] = 0
 
+    print(adj_m)
+
     data["val"] = (data["train"][0][idx[nsamples:]], data["train"][1][idx[nsamples:]], data["train"][2][idx[nsamples:]], data["train"][3], adj_m)
     data["train"] = (data["train"][0][idx[:nsamples]], data["train"][1][idx[:nsamples]], data["train"][2][idx[:nsamples]], data["test"][3], adj_m)
 

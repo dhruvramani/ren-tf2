@@ -93,7 +93,7 @@ def main(load=True):
     val_text_arr, val_all_labels, val_mask_arr, _, _ = val
     test_text_arr, test_all_labels, test_mask_arr, _, _ = test
 
-    adj_bias = adj_to_bias(adj_m, [adj_m.shape[0]], nhood=1)
+    adj_bias = adj_to_bias(adj_m, adj_m.shape[0], nhood=1)
 
     # Setup Checkpoint + Log Paths
     ckpt_dir = "./checkpoints/"

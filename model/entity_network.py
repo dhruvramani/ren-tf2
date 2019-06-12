@@ -139,6 +139,7 @@ class EntityNetwork():
         '''
             Currently just multiplying the activations from REN with adjacency, seems to be performing better 
             than the GAT on label embeddings.
+            - OVERFITTED, not nice.
 
         '''
         return logits

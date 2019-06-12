@@ -172,7 +172,7 @@ def main(load=True):
             
             # Validate every so often
             if epoch % FLAGS.validate_every == 0:
-                val_loss, val_metric = do_eval(val_n, bsz, sess, entity_net, val_text_arr, val_all_labels, val_mask_arr, labels_embedding, adj_bias)
+                val_loss, val_metric = do_eval(val_n, bsz, sess, entity_net, val_text_arr, val_all_labels, val_mask_arr, labels_embedding, adj_bias, adj_m)
                 
                 
                 # Add val loss, val acc to data 
@@ -186,7 +186,7 @@ def main(load=True):
                     best_val_loss = val_loss
                     best_val_metric = val_metric
                     best_val_epoch = epoch
-                    test_loss, test_metric = do_eval(test_n, eval_bsz, sess, entity_net, test_text_arr, test_all_labels, test_mask_arr, labels_embedding, adj_bias)
+                    test_loss, test_metric = do_eval(test_n, eval_bsz, sess, entity_net, test_text_arr, test_all_labels, test_mask_arr, labels_embedding, adj_bias, adj_m)
                     tqdm.write("Test loss: {}   ;   [P, R, F-score]: {}".format(test_loss, test_metric))
 
 
@@ -210,7 +210,7 @@ def main(load=True):
         tqdm.write("Test loss: {}   ;   [P, R, F-score]: {}".format(test_loss, test_metric))
         
 
-def do_eval(n, bsz, sess, entity_net, text_arr, labels, mask, labels_embedding, adj_bias):
+def do_eval(n, bsz, sess, entity_net, text_arr, labels, mask, labels_embedding, adj_bias, adj_m):
     """Perform an Evaluation Epoch on the Given Data"""
 
     eval_loss, y_true, y_pred = [], [], []

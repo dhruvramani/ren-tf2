@@ -47,7 +47,8 @@ class EntityNetwork():
         self.mask = tf.placeholder(tf.int32, [None], name="Mask")
 
         self.labels_embedding = tf.placeholder(tf.float32, [1, self.labels_dim, self.embed_sz], name="LabelEmbeds")
-        self.bias_adj = tf.placeholder(tf.float32, [1, self.labels_dim, self.labels_dim], name="Adjacency")
+        self.bias_adj = tf.placeholder(tf.float32, [1, self.labels_dim, self.labels_dim], name="AdjacencyBias") # for GAT
+        self.adj_m = tf.placeholder(tf.float32, [self.labels_dim, self.labels_dim], name="Adjacency")
 
         # Setup Global, Epoch Step 
         self.global_step = tf.Variable(0, trainable=False, name="Global_Step")
@@ -132,7 +133,7 @@ class EntityNetwork():
         logits = tf.reshape(op_embedd, (-1, self.labels_dim))  # Shape: [batch_size * mask_dim, label_dim]
         gat_logits = self.gat_main(self.labels_embedding, self.bias_adj, hid_units=[50], n_heads=[8, 1], nb_classes=self.labels_dim) # Shape : [1, labels_dim, labels_dim]
 
-        logits = tf.matmul(logits, gat_logits[0])
+        logits = tf.matmul(logits, self.adj_m) #tf.matmul(logits, gat_logits[0])
 
         return logits
         
@@ -235,6 +236,7 @@ class EntityNetwork():
             f_2 = tf.layers.conv1d(seq_fts, 1, 1)
             logits = f_1 + tf.transpose(f_2, [0, 2, 1])
             coefs = tf.nn.softmax(tf.nn.leaky_relu(logits) + bias_mat)
+            print(self.coefs)
 
             if coef_drop != 0.0:
                 coefs = tf.nn.dropout(coefs, 1.0 - coef_drop)

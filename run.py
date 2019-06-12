@@ -148,7 +148,8 @@ def main(load=True):
                                                              entity_net.labels: labels_unrolled,
                                                              entity_net.mask: mask_index,
                                                              entity_net.labels_embedding: labels_embedding,
-                                                             entity_net.bias_adj : adj_bias})
+                                                             entity_net.bias_adj : adj_bias,
+                                                             entity_net.adj_m : adj_m})
 
                 train_loss.append(curr_loss)
                 ground_truth = ground_truth.astype("int")
@@ -225,7 +226,8 @@ def do_eval(n, bsz, sess, entity_net, text_arr, labels, mask, labels_embedding, 
                                                             entity_net.labels: labels_unrolled,
                                                             entity_net.mask: mask_index,
                                                             entity_net.labels_embedding: labels_embedding,
-                                                            entity_net.bias_adj : adj_bias})
+                                                            entity_net.bias_adj : adj_bias,
+                                                            entity_net.adj_m : adj_m})
         eval_loss.append(curr_eval_loss)    
         ground_truth = ground_truth.astype("int")
         predictions = (logits >= 0.5).astype("int")

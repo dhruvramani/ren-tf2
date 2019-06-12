@@ -236,7 +236,7 @@ def pad_stories(text_arr, all_labels, mask_arr, max_sentence_length, max_word_le
     mask_arr = np.expand_dims(mask_arr, 2)
     return text_arr, all_labels, mask_arr
 
-def parse(load=True, adj_threshold=0.3):
+def parse(load=True, adj_threshold=0.5):
     train_data, test_data, val_data = (), (), ()
     
     if(os.path.isfile(train_pickle_path) and load == True):

@@ -135,6 +135,12 @@ class EntityNetwork():
 
         logits = tf.matmul(logits, self.adj_m) #tf.matmul(logits, gat_logits[0])
 
+        # NOTE : @devamanyu
+        '''
+            Currently just multiplying the activations from REN with adjacency, seems to be performing better 
+            than the GAT on label embeddings.
+
+        '''
         return logits
         
 

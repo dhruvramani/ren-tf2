@@ -141,7 +141,7 @@ class EntityNetwork():
             Currently doing GAT on logits using adj of labels.
 
         '''
-        return logits
+        return logits[0]
         
 
 

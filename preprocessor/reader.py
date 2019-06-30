@@ -12,6 +12,7 @@ import pickle
 import numpy as np
 from tqdm import tqdm
 from collections import OrderedDict
+from bert_embedding import BertEmbedding
 
 FORMAT_STR = "qa%d_"
 PAD_ID = 0
@@ -22,7 +23,7 @@ _DIR = "/home/nevronas/Projects/Personal-Projects/Dhruv/NeuralDialog-CVAE/data/c
 _GLOVE_PATH = '/home/nevronas/word_embeddings/glove_twitter'
 #_DIR = "/mnt/data/devamanyu/work/StoryCommonSense/storycommonsense_data/"
 #_GLOVE_PATH = '/mnt/data/devamanyu/work/glove_twitter'
-_EMB_DIM = 100
+_EMB_DIM = 768
 _MAX_WLEN = 18
 _VOCAB = -1
 
@@ -33,6 +34,8 @@ partition_path = _DIR + "storyid_partition.txt"
 metadata_path = _DIR + "metadata.json"
 annotation_path = _DIR + "json_version/annotations.json"
 
+ctx = mx.gpu(0)
+bert = BertEmbedding(ctx=ctx)
 classes = ["joy", "trust", "fear", "surprise", "sadness", "disgust", "anger", "anticipation"]
 
 def init_glove(glove_path=_GLOVE_PATH): # Run only first time
@@ -118,11 +121,9 @@ def create_dataset(data_type="train"):
                 continue
 
             story = raw_data[id_key]
-
             
             if(story["partition"] != data_type):
                 continue 
-
 
             sentences = story["lines"]
             characters = sentences['1']["characters"]
@@ -130,15 +131,15 @@ def create_dataset(data_type="train"):
             
             s_dim, c_dim, count = len(sentences.keys()), len(characters.keys()), 0
             mask_dim = s_dim * c_dim
-            embeddings, labels, mask = [], [], [0] * mask_dim
+            sentences, labels, mask = [], [], [0] * mask_dim
 
             for si in range(s_dim):
                 sent = sentences[str(si + 1)]
                 text = sent["text"]
                 
                 embed_string = re.sub(r"[^a-zA-Z]+", ' ', text)
-                embedding = [glove.get(word, glove['unk']) for word in embed_string.split(" ")]
-                embeddings.append(embedding)
+                #embedding = [glove.get(word, glove['unk']) for word in embed_string.split(" ")]
+                sentences.append(embed_string)
                 
                 charecs = list(sent["characters"].keys())
                 labels.append([])
@@ -152,14 +153,17 @@ def create_dataset(data_type="train"):
                     count += 1
 
 
+            embeddings = bert(sentences)
+            embeddings = [embeddings[i][1][0] for i in len(embeddings)]
+
             mask = np.asarray(mask)
-            labels = np.asarray(labels)
             embeddings = np.asarray(embeddings)
+            labels = np.asarray(labels)
             labels = labels.reshape(labels.shape[0] * labels.shape[1], labels.shape[2])
             
             all_labels.append(labels)   # Shape : [stories, s_d * c_d, labels_dim]
             mask_arr.append(mask)       # Shape : [stories, s_d * c_d]
-            text_arr.append(embeddings) # Shape : [stories, s_d, words, embedding_dim]
+            text_arr.append(embeddings) # Shape : [stories, s_d, embedding_dim]
             char_arr.append(c_dim)      # Shape : [stories, 1]  - No. of chars. - to find upper bound
             
             # OR - decide
@@ -180,7 +184,7 @@ def create_dataset(data_type="train"):
 
     return text_arr, all_labels, mask_arr, char_arr, labels_embedding, adj_m # stories_dat # - ALL ARE LISTS
 
-def pad_stories(text_arr, all_labels, mask_arr, max_sentence_length, max_word_length, max_char_length):
+def pad_stories(text_arr, all_labels, mask_arr, max_sentence_length, max_char_length):
     
     for i in range(len(text_arr)):
         story = text_arr[i]
@@ -193,16 +197,7 @@ def pad_stories(text_arr, all_labels, mask_arr, max_sentence_length, max_word_le
             for j in range(shape[0]):
                 a = story[j].tolist()
                 new_story.append(a)
-        for j in range(shape[0]):
-            if(len(story[j]) != max_word_length):
-                if(story_type != list):
-                    a = new_story[j]
-                    for i in range(max_word_length - len(a)):
-                        a.append([0] * _EMB_DIM)
-                    new_story[j] = np.asarray(a)
-                else :
-                    story[j] = story[j] + [[0] * _EMB_DIM] * (max_word_length - len(list(story[j])))
-                    story[j] = np.asarray(story[j])
+
         if(story_type != list):
             story = np.asarray([new_story[k] for k in range(shape[0])])
         else:
@@ -211,11 +206,6 @@ def pad_stories(text_arr, all_labels, mask_arr, max_sentence_length, max_word_le
             text_arr[i] = np.pad(story, ((0, sentence_pad), (0, 0), (0, 0)), 'constant')
         else :
             text_arr[i] = story
-
-    for i in range(len(text_arr)):
-        if(text_arr[i].shape[1] != max_word_length):
-            pad_length = max_word_length - text_arr[i].shape[1]
-            text_arr[i] = np.pad(text_arr[i], ((0, 0), (0, pad_length), (0,0)), 'constant')
     
     for i in range(len(all_labels)):
         label = all_labels[i]
@@ -230,7 +220,7 @@ def pad_stories(text_arr, all_labels, mask_arr, max_sentence_length, max_word_le
         mask_arr[i] = np.pad(mask, ((0, pad_length)), 'constant')
 
     mask_arr = np.asarray(mask_arr, dtype='int')     # Shape : [max_sentence_length, s_d * c_d]
-    text_arr = np.asarray(text_arr)     # Shape : [max_sentence_length, max_word_length, embedding_dim]
+    text_arr = np.asarray(text_arr)     # Shape : [max_sentence_length, embedding_dim]
     all_labels = np.asarray(all_labels) # Shape : [max_sentence_length, s_d * c_d, labels_dim]
 
     mask_arr = np.expand_dims(mask_arr, 2)
@@ -259,23 +249,21 @@ def parse(load=True, adj_threshold=0.7):
         return train_data, test_data, val_data
 
     data = {"train" : (), "test" :()}
-    msl, mwl, mcl, mask_dim, labels_dim, embedding_dim = 0, 0, 0, 0, 0, _EMB_DIM
+    msl, mcl, mask_dim, labels_dim, embedding_dim = 0, 0, 0, 0, _EMB_DIM
 
     for dtype in data.keys():
         text_arr, all_labels, mask_arr, char_arr, labels_embedding, adj_m = create_dataset(data_type=dtype)
     
         dataset_size = len(text_arr)
         sentence_lengths = [story.shape[0] for story in text_arr]
-        word_lengths = [len(story[ss]) for story in text_arr for ss in range(story.shape[0])]
+        #word_lengths = [len(story[ss]) for story in text_arr for ss in range(story.shape[0])]
 
         max_sentence_length = max(sentence_lengths)
-        max_word_length = max(word_lengths)
         max_char_length = max(char_arr)
 
         if(max_sentence_length > msl):
             msl = max_sentence_length
-        if(max_word_length > mwl):
-            mwl = max_word_length
+
         if(max_char_length > mcl):
             mcl = max_char_length
 
@@ -283,11 +271,11 @@ def parse(load=True, adj_threshold=0.7):
         mask_dim = max_sentence_length*max_char_length
         data[dtype] = (text_arr, all_labels,  mask_arr, labels_embedding, adj_m)
         # TODO : MOVE
-    print(msl, mwl, mcl)  
+    print(msl, mcl)  
 
     for dtype in data.keys():
         text_arr, all_labels, mask_arr, labels_embedding, adj_m = data[dtype]
-        text_arr, all_labels, mask_arr = pad_stories(text_arr, all_labels, mask_arr, msl, mwl, mcl)
+        text_arr, all_labels, mask_arr = pad_stories(text_arr, all_labels, mask_arr, msl, mcl)
         data[dtype] = (text_arr, all_labels,  mask_arr, labels_embedding, adj_m)
 
     nsamples = int(text_arr.shape[0] * 0.8)
@@ -310,7 +298,6 @@ def parse(load=True, adj_threshold=0.7):
     with open(metadata_path, 'w') as f:
         metadata = {
             'max_char_length': mcl,
-            'max_word_length': mwl,
             'max_sentence_length': msl,
             'mask_dim' : mask_dim,
             'labels_dim' : labels_dim,
@@ -338,4 +325,4 @@ def tokenize(sentence):
     return [token.strip().lower() for token in re.split(SPLIT_RE, sentence) if token.strip()]
 
 if __name__ == '__main__':
-    parse(load=False, adj_threshold=0.3)
+    parse(load=False, adj_threshold=0.7)

@@ -25,23 +25,22 @@ prelu = functools.partial(prelu_func, initializer=tf.constant_initializer(1.0))
 
 
 class EntityNetwork():
-    def __init__(self, vocabulary, sentence_len, story_len, batch_size, memory_slots, embedding_size, mask_dim, labels_dim,
+    def __init__(self, vocabulary, story_len, batch_size, memory_slots, embedding_size, mask_dim, labels_dim,
                  learning_rate, decay_steps, decay_rate, clip_gradients=40.0, 
                  initializer=tf.random_normal_initializer(stddev=0.1)):
         """
         Initialize an Entity Network with the necessary hyperparameters.
 
         :param vocabulary: Word Vocabulary for given model.
-        :param sentence_len: Maximum length of a sentence.
         :param story_len: Maximum length of a story.
         """
-        self.vocab_sz, self.sentence_len, self.story_len, self.mask_dim = vocabulary, sentence_len, story_len, mask_dim
+        self.vocab_sz, self.story_len, self.mask_dim = vocabulary, story_len, mask_dim
         self.embed_sz, self.memory_slots, self.init, self.labels_dim = embedding_size, memory_slots, initializer, labels_dim
         self.bsz, self.lr, self.decay_steps, self.decay_rate = batch_size, learning_rate, decay_steps, decay_rate
         self.clip_gradients = clip_gradients
 
         # Setup Placeholders
-        self.S = tf.placeholder(tf.float32, [None, self.story_len, self.sentence_len, self.embed_sz], name="Story")
+        self.S = tf.placeholder(tf.float32, [None, self.story_len, self.embed_sz], name="Story")
         #self.S_len = tf.placeholder(tf.int32, [None], name="Story_Length")
         self.labels = tf.placeholder(tf.float32, [None, self.labels_dim], name="Labels")
         self.mask = tf.placeholder(tf.int32, [None], name="Mask")
@@ -108,19 +107,10 @@ class EntityNetwork():
         Build inference pipeline, going from the story and question, through the memory cells, to the
         distribution over possible answers.  
         """
-        # Story Input Encoder
-        #story_embeddings = tf.nn.embedding_lookup(self.E, self.S)             # Shape: [None, story_len, sent_len, embed_sz]
-        # story_embeddings = tf.multiply(self.S, self.story_mask)     # Shape: [None, story_len, sent_len, embed_sz]
-        story_embeddings = tf.reduce_sum(self.S, axis=[2])          # Shape: [None, story_len, embed_sz]
-
-        # Query Input Encoder
-        #query_embedding = tf.nn.embedding_lookup(self.E, self.Q)              # Shape: [None, sent_len, embed_sz]
-        #query_embedding = tf.multiply(query_embedding, self.query_mask)       # Shape: [None, sent_len, embed_sz]
-        #query_embedding = tf.reduce_sum(query_embedding, axis=[1])            # Shape: [None, embed_sz]
 
         # Send Story through Memory Cell
         initial_state = self.cell.zero_state(self.bsz, dtype=tf.float32)
-        memory_traces, memories = tf.nn.dynamic_rnn(self.cell, story_embeddings, initial_state=initial_state) # sequence_length=self.story_len,
+        memory_traces, memories = tf.nn.dynamic_rnn(self.cell, self.S, initial_state=initial_state) # sequence_length=self.story_len,
         
         stacked_memories = tf.stack(memory_traces, axis=2)
         memories = tf.reshape(stacked_memories, (-1, self.mask_dim, self.embed_sz))

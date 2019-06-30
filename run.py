@@ -48,7 +48,7 @@ tf.app.flags.DEFINE_integer("memory_slots", 8, "Number of dynamic memory slots."
 tf.app.flags.DEFINE_integer("batch_size", 237, "Batch size for training/evaluating.")
 tf.app.flags.DEFINE_integer("eval_batch_size", 237, "Batch size for training/evaluating.")
 tf.app.flags.DEFINE_integer("num_epochs", 50, "Number of Training Epochs.")
-tf.app.flags.DEFINE_float("learning_rate", .01, "Learning rate for ADAM Optimizer.")
+tf.app.flags.DEFINE_float("learning_rate", .1, "Learning rate for ADAM Optimizer.")
 tf.app.flags.DEFINE_integer("decay_epochs", 25, "Number of epochs to run before learning rate decay.")
 tf.app.flags.DEFINE_float("decay_rate", 0.5, "Rate of decay for learning rate.")
 tf.app.flags.DEFINE_float("clip_gradients", 40.0, 'Norm to clip gradients to.')
@@ -106,7 +106,7 @@ def main(load=True):
     # Build Model
     with tf.Session() as sess:
         # Instantiate Model
-        entity_net = EntityNetwork(metadata['vocab_size'], metadata['max_word_length'], metadata['max_sentence_length'], FLAGS.batch_size,
+        entity_net = EntityNetwork(metadata['vocab_size'], metadata['max_sentence_length'], FLAGS.batch_size,
                                    FLAGS.memory_slots, FLAGS.embedding_size, metadata['mask_dim'], metadata['labels_dim'], FLAGS.learning_rate, 
                                    FLAGS.decay_epochs * (metadata['dataset_size'] / FLAGS.batch_size), FLAGS.decay_rate)
         

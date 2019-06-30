@@ -130,12 +130,12 @@ class EntityNetwork():
         # map each memory output into label_dim
         op_embedd = tf.reshape(memories, (-1, self.embed_sz))
         op_embedd = tf.matmul(op_embedd, self.R)
-        logits = tf.reshape(op_embedd, (1,  self.labels_dim, op_embedd.get_shape().as_list()[0]))  # Shape: [batch_size * mask_dim, label_dim]
+        logits = tf.reshape(op_embedd, (self.bsz, self.mask_dim,  self.labels_dim))  # Shape: [batch_size, mask_dim, label_dim]
 
         logits = self.gat_main(logits, self.bias_adj, hid_units=[50], n_heads=[8, 1], nb_classes=self.labels_dim) # Shape : [1, labels_dim, labels_dim]
         #logits = tf.matmul(logits, gat_logits[0])
-
         print(logits.get_shape().as_list())
+
         # NOTE : @devamanyu
         '''
             Currently doing GAT on labels_embedding and multiplying to logits. Not very useful.

@@ -133,7 +133,7 @@ class EntityNetwork():
         logits = tf.reshape(op_embedd, (self.bsz * self.mask_dim,  self.labels_dim, 1))  # Shape: [batch_size, mask_dim, label_dim]
 
         logits = self.gat_main(logits, self.bias_adj, hid_units=[50], n_heads=[8, 1], nb_classes=1) # Shape : [1, labels_dim, labels_dim]
-        logits = tf.reshape(logits, self.bsz * self.mask_dim, self.labels_dim)
+        logits = tf.reshape(logits, (self.bsz * self.mask_dim, self.labels_dim))
 
         # NOTE : @devamanyu
         '''

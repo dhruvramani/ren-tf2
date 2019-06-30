@@ -135,6 +135,7 @@ class EntityNetwork():
         logits = self.gat_main(logits, self.bias_adj, hid_units=[50], n_heads=[8, 1], nb_classes=self.labels_dim) # Shape : [1, labels_dim, labels_dim]
         #logits = tf.matmul(logits, gat_logits[0])
 
+        print(logits.get_shape().as_list())
         # NOTE : @devamanyu
         '''
             Currently doing GAT on labels_embedding and multiplying to logits. Not very useful.

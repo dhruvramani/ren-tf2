@@ -9,6 +9,7 @@ import os
 import json
 import bcolz
 import pickle
+import mxnet as mx
 import numpy as np
 from tqdm import tqdm
 from collections import OrderedDict

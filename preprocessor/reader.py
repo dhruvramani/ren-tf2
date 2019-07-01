@@ -9,7 +9,6 @@ import os
 import json
 import bcolz
 import pickle
-import mxnet as mx
 import numpy as np
 from tqdm import tqdm
 from collections import OrderedDict
@@ -35,8 +34,7 @@ partition_path = _DIR + "storyid_partition.txt"
 metadata_path = _DIR + "metadata.json"
 annotation_path = _DIR + "json_version/annotations.json"
 
-ctx = mx.gpu(0)
-bert = BertEmbedding(ctx=ctx)
+bert = BertEmbedding()
 classes = ["joy", "trust", "fear", "surprise", "sadness", "disgust", "anger", "anticipation"]
 
 def init_glove(glove_path=_GLOVE_PATH): # Run only first time

@@ -12,7 +12,7 @@ import pickle
 import numpy as np
 from tqdm import tqdm
 from collections import OrderedDict
-from bert_embedding import BertEmbedding
+from bert_serving.client import BertClient
 
 FORMAT_STR = "qa%d_"
 PAD_ID = 0
@@ -34,7 +34,7 @@ partition_path = _DIR + "storyid_partition.txt"
 metadata_path = _DIR + "metadata.json"
 annotation_path = _DIR + "json_version/annotations.json"
 
-bert = BertEmbedding()
+bert = BertClient()
 classes = ["joy", "trust", "fear", "surprise", "sadness", "disgust", "anger", "anticipation"]
 
 def init_glove(glove_path=_GLOVE_PATH): # Run only first time
@@ -152,12 +152,9 @@ def create_dataset(data_type="train"):
                     count += 1
 
 
-            embeddings = bert(sentences)
-            embeddings = [embeddings[i][1][0] for i in len(embeddings)]
-
             mask = np.asarray(mask)
-            embeddings = np.asarray(embeddings)
             labels = np.asarray(labels)
+            embeddings = bert.encode(sentences)
             labels = labels.reshape(labels.shape[0] * labels.shape[1], labels.shape[2])
             
             all_labels.append(labels)   # Shape : [stories, s_d * c_d, labels_dim]

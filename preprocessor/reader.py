@@ -130,7 +130,7 @@ def create_dataset(data_type="train"):
             
             s_dim, c_dim, count = len(sentences.keys()), len(characters.keys()), 0
             mask_dim = s_dim * c_dim
-            sentences, labels, mask = [], [], [0] * mask_dim
+            sents, labels, mask = [], [], [0] * mask_dim
 
             for si in range(s_dim):
                 sent = sentences[str(si + 1)]
@@ -138,7 +138,7 @@ def create_dataset(data_type="train"):
                 
                 embed_string = re.sub(r"[^a-zA-Z]+", ' ', text)
                 #embedding = [glove.get(word, glove['unk']) for word in embed_string.split(" ")]
-                sentences.append(embed_string)
+                sents.append(embed_string)
                 
                 charecs = list(sent["characters"].keys())
                 labels.append([])
@@ -154,7 +154,7 @@ def create_dataset(data_type="train"):
 
             mask = np.asarray(mask)
             labels = np.asarray(labels)
-            embeddings = bert.encode(sentences)
+            embeddings = bert.encode(sents)
             labels = labels.reshape(labels.shape[0] * labels.shape[1], labels.shape[2])
             
             all_labels.append(labels)   # Shape : [stories, s_d * c_d, labels_dim]
@@ -278,17 +278,17 @@ def parse(load=True, adj_threshold=0.7):
     idx = [i for i in range(text_arr.shape[0])]
     np.random.shuffle(idx)
 
-    adj_m = (data["train"][4] + data["test"][4]) / 2.0 # NOTE : @devamanyu - should we go with this?
+    adj_m = (data["train"][3] + data["test"][3]) / 2.0 # NOTE : @devamanyu - should we go with this?
     adj_m[adj_m >= adj_threshold] = 1
     adj_m[adj_m < adj_threshold] = 0
 
     print(adj_m)
 
-    data["val"] = (data["train"][0][idx[nsamples:]], data["train"][1][idx[nsamples:]], data["train"][2][idx[nsamples:]], data["train"][3], adj_m)
-    data["train"] = (data["train"][0][idx[:nsamples]], data["train"][1][idx[:nsamples]], data["train"][2][idx[:nsamples]], data["test"][3], adj_m)
+    data["val"] = (data["train"][0][idx[nsamples:]], data["train"][1][idx[nsamples:]], data["train"][2][idx[nsamples:]], adj_m)
+    data["train"] = (data["train"][0][idx[:nsamples]], data["train"][1][idx[:nsamples]], data["train"][2][idx[:nsamples]], adj_m)
 
     for dtype in data.keys():
-        text_arr, all_labels, mask_arr, _, _ = data[dtype]
+        text_arr, all_labels, mask_arr, _ = data[dtype]
         print(text_arr.shape, all_labels.shape, mask_arr.shape)
 
     with open(metadata_path, 'w') as f:
@@ -321,4 +321,4 @@ def tokenize(sentence):
     return [token.strip().lower() for token in re.split(SPLIT_RE, sentence) if token.strip()]
 
 if __name__ == '__main__':
-    parse(load=False, adj_threshold=0.7)
+    parse(load=False, adj_threshold=0.3)

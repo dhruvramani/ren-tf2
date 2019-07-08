@@ -107,7 +107,7 @@ def create_dataset(data_type="train"):
     data_type = "dev" if data_type == "train" else data_type
     annotation_file = open(annotation_path, "r")
     raw_data = json.load(annotation_file, object_pairs_hook=OrderedDict)
-    glove = load_glove()
+    #glove = load_glove()
 
     text_arr, all_labels, char_arr, mask_arr = [], [], [], []
     stories_dat = []
@@ -165,7 +165,7 @@ def create_dataset(data_type="train"):
             # OR - decide
             #stories_dat.append((embeddings, labels, mask, c_dim))
 
-    labels_embedding = np.asarray([glove.get(label, glove['unk']) for label in classes])
+    #labels_embedding = np.asarray([glove.get(label, glove['unk']) for label in classes])
     adj_m = np.zeros((len(classes), len(classes)))
 
     for i in range(len(all_labels)):
@@ -178,7 +178,7 @@ def create_dataset(data_type="train"):
 
     # Process more as in the paper
 
-    return text_arr, all_labels, mask_arr, char_arr, labels_embedding, adj_m # stories_dat # - ALL ARE LISTS
+    return text_arr, all_labels, mask_arr, char_arr, adj_m #labels_embedding, stories_dat # - ALL ARE LISTS
 
 def pad_stories(text_arr, all_labels, mask_arr, max_sentence_length, max_char_length):
     
@@ -248,7 +248,7 @@ def parse(load=True, adj_threshold=0.7):
     msl, mcl, mask_dim, labels_dim, embedding_dim = 0, 0, 0, 0, _EMB_DIM
 
     for dtype in data.keys():
-        text_arr, all_labels, mask_arr, char_arr, labels_embedding, adj_m = create_dataset(data_type=dtype)
+        text_arr, all_labels, mask_arr, char_arr, adj_m = create_dataset(data_type=dtype)
     
         dataset_size = len(text_arr)
         sentence_lengths = [story.shape[0] for story in text_arr]
@@ -265,14 +265,14 @@ def parse(load=True, adj_threshold=0.7):
 
         _, labels_dim = len(all_labels[0]), len(all_labels[0][0])
         mask_dim = max_sentence_length*max_char_length
-        data[dtype] = (text_arr, all_labels,  mask_arr, labels_embedding, adj_m)
+        data[dtype] = (text_arr, all_labels,  mask_arr, adj_m)
         # TODO : MOVE
     print(msl, mcl)  
 
     for dtype in data.keys():
-        text_arr, all_labels, mask_arr, labels_embedding, adj_m = data[dtype]
+        text_arr, all_labels, mask_arr, adj_m = data[dtype]
         text_arr, all_labels, mask_arr = pad_stories(text_arr, all_labels, mask_arr, msl, mcl)
-        data[dtype] = (text_arr, all_labels,  mask_arr, labels_embedding, adj_m)
+        data[dtype] = (text_arr, all_labels, mask_arr, adj_m)
 
     nsamples = int(text_arr.shape[0] * 0.8)
     idx = [i for i in range(text_arr.shape[0])]

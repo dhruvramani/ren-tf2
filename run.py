@@ -89,12 +89,12 @@ def adj_to_bias(adj, sizes, nhood=1):
 def main(load=True):
     # Get Vectorized Forms of Stories, Questions, and Answers
     train, test, val = parse()
-    train_text_arr, train_all_labels, train_mask_arr, labels_embedding, adj_m = train
-    val_text_arr, val_all_labels, val_mask_arr, _, _ = val
-    test_text_arr, test_all_labels, test_mask_arr, _, _ = test
+    train_text_arr, train_all_labels, train_mask_arr, adj_m = train
+    val_text_arr, val_all_labels, val_mask_arr, _ = val
+    test_text_arr, test_all_labels, test_mask_arr, _ = test
 
     adj_bias = adj_to_bias(adj_m, adj_m.shape[0], nhood=1)
-    labels_embedding = labels_embedding[np.newaxis]
+    #labels_embedding = labels_embedding[np.newaxis]
     adj_bias = adj_bias[np.newaxis]
 
     # Setup Checkpoint + Log Paths
@@ -146,8 +146,7 @@ def main(load=True):
                 curr_loss, ground_truth, logits, _ = sess.run([entity_net.loss_val, entity_net.ground_truth, tf.nn.sigmoid(entity_net.logits), entity_net.train_op], # = [] 
                                                   feed_dict={entity_net.S: train_text_arr[start:end], 
                                                              entity_net.labels: labels_unrolled,
-                                                             entity_net.mask: mask_index,
-                                                             entity_net.labels_embedding: labels_embedding,
+                                                             entity_net.mask: mask_index, # entity_net.labels_embedding: labels_embedding,
                                                              entity_net.bias_adj : adj_bias,
                                                              entity_net.adj_m : adj_m})
 

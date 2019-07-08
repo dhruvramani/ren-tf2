@@ -45,7 +45,7 @@ class EntityNetwork():
         self.labels = tf.placeholder(tf.float32, [None, self.labels_dim], name="Labels")
         self.mask = tf.placeholder(tf.int32, [None], name="Mask")
 
-        self.labels_embedding = tf.placeholder(tf.float32, [1, self.labels_dim, self.embed_sz], name="LabelEmbeds")
+        #self.labels_embedding = tf.placeholder(tf.float32, [1, self.labels_dim, self.embed_sz], name="LabelEmbeds")
         self.bias_adj = tf.placeholder(tf.float32, [1, self.labels_dim, self.labels_dim], name="AdjacencyBias") # for GAT
         self.adj_m = tf.placeholder(tf.float32, [self.labels_dim, self.labels_dim], name="Adjacency")
 

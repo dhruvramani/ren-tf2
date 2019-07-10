@@ -1,3 +1,15 @@
+# Story Emotion Tracking
+
+# Setup 
+
+```bash
+    conda env create -f environment.yml
+    conda activate story-emotion
+```
+
+
+# Old
+
 # Recurrent Entity Networks
 Tensorflow/TFLearn Implementation of ["Tracking the World State with Recurrent Entity Networks"](https://arxiv.org/abs/1612.03969) by Henaff et. al.
 

@@ -1,38 +1,30 @@
-"""
-run.py
+""" Core script for building, valing, and evaluating a Recurrent Entity Network. """
 
-Core script for building, valing, and evaluating a Recurrent Entity Network.
-"""
+from config import *
+
 from model.entity_network import EntityNetwork
 from preprocessor.reader import parse, init_glove
+
+import os
+import json
+import pickle
+import tflearn
 import datetime
 import numpy as np
-import os
-import pickle
 from tqdm import tqdm
 import tensorflow as tf
-import tflearn
-import json
 from sklearn.metrics import precision_recall_fscore_support
 
 
 FLAGS = tf.app.flags.FLAGS
 
-_DIR = "/home/nevronas/Projects/Personal-Projects/Dhruv/NeuralDialog-CVAE/data/commonsense/"
-_GLOVE_PATH = '/home/nevronas/word_embeddings/glove_twitter'
-# _DIR = "/mnt/data/devamanyu/work/StoryCommonSense/storycommonsense_data/"
-# _GLOVE_PATH = '/mnt/data/devamanyu/work/glove_twitter'
-_EMB_DIM = 100
-_MAX_WLEN = 18
-_VOCAB = -1
+pickle_path = DIR + "data.pkl"
+metadata_path = DIR + "metadata.json"
+partition_path = DIR + "storyid_partition.txt"
+annotation_path = DIR + "json_version/annotations.json"
 
-pickle_path = _DIR + "data.pkl"
-metadata_path = _DIR + "metadata.json"
-partition_path = _DIR + "storyid_partition.txt"
-annotation_path = _DIR + "json_version/annotations.json"
-
-with tf.gfile.Open(metadata_path) as metadata_file:
-    metadata = json.load(metadata_file)
+# with tf.gfile.Open(metadata_path) as metadata_file:
+#     metadata = json.load(metadata_file)
 
 classes = ["joy", "trust", "fear", "surprise", "sadness", "disgust", "anger", "anticipation"]
 
@@ -89,6 +81,7 @@ def adj_to_bias(adj, sizes, nhood=1):
 def main(load=True):
     # Get Vectorized Forms of Stories, Questions, and Answers
     train, test, val = parse()
+    exit()
     train_text_arr, train_all_labels, train_mask_arr, labels_embedding, adj_m = train
     val_text_arr, val_all_labels, val_mask_arr, _, _ = val
     test_text_arr, test_all_labels, test_mask_arr, _, _ = test

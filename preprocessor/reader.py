@@ -4,6 +4,8 @@ reader.py
 Core script containing preprocessing logic - reads bAbI Task Story, and returns
 vectorized forms of the stories, questions, and answers.
 """
+from config import *
+
 import re
 import os
 import json
@@ -12,6 +14,7 @@ import pickle
 import numpy as np
 from tqdm import tqdm
 from collections import OrderedDict
+from preprocessor.tokenizer import Tokenizer
 from bert_embedding import BertEmbedding
 
 FORMAT_STR = "qa%d_"
@@ -19,30 +22,57 @@ PAD_ID = 0
 SPLIT_RE = re.compile('(\W+)?')
 DATA_TYPES = ['train', 'valid', 'test']
 
-_DIR = "/home/nevronas/Projects/Personal-Projects/Dhruv/NeuralDialog-CVAE/data/commonsense/"
-_GLOVE_PATH = '/home/nevronas/word_embeddings/glove_twitter'
-#_DIR = "/mnt/data/devamanyu/work/StoryCommonSense/storycommonsense_data/"
-#_GLOVE_PATH = '/mnt/data/devamanyu/work/glove_twitter'
-_EMB_DIM = 768
-_MAX_WLEN = 18
-_VOCAB = -1
 
-train_pickle_path = _DIR + "train_data.pkl"
-test_pickle_path = _DIR + "test_data.pkl"
-val_pickle_path = _DIR + "val_data.pkl"
-partition_path = _DIR + "storyid_partition.txt"
-metadata_path = _DIR + "metadata.json"
-annotation_path = _DIR + "json_version/annotations.json"
+PAD_TOKEN = '<pad>'
+UNK_TOKEN = '<unk>'
+SOS_TOKEN = '<sos>'
+EOS_TOKEN = '<eos>'
+PAD_ID, UNK_ID, SOS_ID, EOS_ID = [0, 1, 2, 3]
 
-ctx = mx.gpu(0)
-bert = BertEmbedding(ctx=ctx)
+
+# Tokenizer
+tokenizer = Tokenizer('spacy')
+
+
+glove = {}
+
+train_pickle_path = DIR + "train_data.pkl"
+test_pickle_path = DIR + "test_data.pkl"
+val_pickle_path = DIR + "val_data.pkl"
+partition_path = DIR + "storyid_partition.txt"
+metadata_path = DIR + "metadata.json"
+annotation_path = DIR + "json_version/annotations.json"
+
+# ctx = mx.gpu(0)
+# bert = BertEmbedding(ctx=ctx)
 classes = ["joy", "trust", "fear", "surprise", "sadness", "disgust", "anger", "anticipation"]
 
 def init_glove(glove_path=_GLOVE_PATH): # Run only first time
-    words = []
-    idx = 0
-    word2idx = {}
-    vectors = bcolz.carray(np.zeros(1), rootdir='{}/27B.{}d.dat'.format(glove_path, _EMB_DIM), mode='w')
+    """
+    Sets up the glove embedding dictionary.
+    First 4 indices are reserved for: '<pad>', '<unk>', '<sos>', '<eos>'
+    """
+    words, word2idx = [], {}
+    idx = 4
+    vectors = bcolz.carray(
+        np.zeros(1), rootdir='{}/27B.{}d.dat'.format(glove_path, _EMB_DIM), mode='w')
+
+    words.append(PAD_TOKEN)
+    words.append(UNK_TOKEN)
+    words.append(SOS_TOKEN)
+    words.append(EOS_TOKEN)
+
+    word2idx[PAD_TOKEN] = PAD_ID
+    word2idx[UNK_TOKEN] = UNK_ID
+    word2idx[SOS_TOKEN] = SOS_ID
+    word2idx[EOS_TOKEN] = EOS_ID
+
+    vectors.append(np.zeros(_EMB_DIM).astype(np.float))
+    random_vector = np.random.uniform(-0.25, 0.25, 100).astype(np.float)
+    vectors.append(random_vector.copy())
+    vectors.append(random_vector.copy())
+    vectors.append(random_vector.copy())
+
     with open('{}/glove.twitter.27B.{}d.txt'.format(glove_path, _EMB_DIM), 'rb') as f:
         for l in f:
             line = l.decode().split()
@@ -53,11 +83,15 @@ def init_glove(glove_path=_GLOVE_PATH): # Run only first time
             vect = np.array(line[1:]).astype(np.float)
             vectors.append(vect)
 
-    vectors = bcolz.carray(vectors.reshape((1193514, _EMB_DIM)), rootdir='{}/27B.{}.dat'.format(glove_path, _EMB_DIM), mode='w')
+    vectors = bcolz.carray(vectors.reshape((1193518, _EMB_DIM)),
+                           rootdir='{}/27B.{}.dat'.format(glove_path, _EMB_DIM), mode='w')
     vectors.flush()
-    pickle.dump(words, open('{}/27B.{}_words.pkl'.format(glove_path, _EMB_DIM), 'wb'))
-    pickle.dump(word2idx, open('{}/27B.{}_idx.pkl'.format(glove_path, _EMB_DIM), 'wb'))
+    pickle.dump(words, open(
+        '{}/27B.{}_words.pkl'.format(glove_path, _EMB_DIM), 'wb'))
+    pickle.dump(word2idx, open(
+        '{}/27B.{}_idx.pkl'.format(glove_path, _EMB_DIM), 'wb'))
     return idx
+
 
 def tokenize(sentence):
     "Tokenize a string by splitting on non-word characters and stripping whitespace."
@@ -227,6 +261,7 @@ def pad_stories(text_arr, all_labels, mask_arr, max_sentence_length, max_char_le
     return text_arr, all_labels, mask_arr
 
 def parse(load=True, adj_threshold=0.7):
+
     train_data, test_data, val_data = (), (), ()
     
     if(os.path.isfile(train_pickle_path) and load == True):

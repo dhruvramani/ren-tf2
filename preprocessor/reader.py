@@ -15,7 +15,6 @@ import numpy as np
 from tqdm import tqdm
 from collections import OrderedDict
 from preprocessor.tokenizer import Tokenizer
-from bert_embedding import BertEmbedding
 
 FORMAT_STR = "qa%d_"
 PAD_ID = 0
@@ -43,8 +42,6 @@ partition_path = DIR + "storyid_partition.txt"
 metadata_path = DIR + "metadata.json"
 annotation_path = DIR + "json_version/annotations.json"
 
-# ctx = mx.gpu(0)
-# bert = BertEmbedding(ctx=ctx)
 classes = ["joy", "trust", "fear", "surprise", "sadness", "disgust", "anger", "anticipation"]
 
 def init_glove(glove_path=_GLOVE_PATH): # Run only first time
@@ -187,7 +184,8 @@ def create_dataset(data_type="train"):
                     count += 1
 
 
-            embeddings = bert(sentences)
+            # NOTE : Put BERT code here
+            #embeddings = bert(sentences)
             embeddings = [embeddings[i][1][0] for i in len(embeddings)]
 
             mask = np.asarray(mask)

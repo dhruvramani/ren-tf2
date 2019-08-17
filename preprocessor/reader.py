@@ -4,7 +4,7 @@ reader.py
 Core script containing preprocessing logic - reads bAbI Task Story, and returns
 vectorized forms of the stories, questions, and answers.
 """
-from config import *
+#from config import *
 
 import re
 import os
@@ -14,25 +14,32 @@ import pickle
 import numpy as np
 from tqdm import tqdm
 from collections import OrderedDict
-from preprocessor.tokenizer import Tokenizer
+#from preprocessor.tokenizer import Tokenizer
+from json import JSONDecoder, JSONDecodeError
 
 FORMAT_STR = "qa%d_"
 PAD_ID = 0
 SPLIT_RE = re.compile('(\W+)?')
 DATA_TYPES = ['train', 'valid', 'test']
 
+DIR = "/home/nevronas/Projects/Personal-Projects/Dhruv/NeuralDialog-CVAE/data/commonsense/"
+_GLOVE_PATH = '/home/nevronas/word_embeddings/glove_twitter'
+#DIR = "/home/devamanyu/ren-tf2/storycommonsense_data/"
+#GLOVE_PATH = '/home/devamanyu/glove_twitter'
+_EMB_DIM = 768
+_MAX_WLEN = 18
+_VOCAB = -1
 
 PAD_TOKEN = '<pad>'
 UNK_TOKEN = '<unk>'
 SOS_TOKEN = '<sos>'
 EOS_TOKEN = '<eos>'
 PAD_ID, UNK_ID, SOS_ID, EOS_ID = [0, 1, 2, 3]
+BERT_LAYERS = 4
 
 
 # Tokenizer
-tokenizer = Tokenizer('spacy')
-
-
+#tokenizer = Tokenizer('spacy')
 glove = {}
 
 train_pickle_path = DIR + "train_data.pkl"
@@ -44,7 +51,22 @@ annotation_path = DIR + "json_version/annotations.json"
 
 classes = ["joy", "trust", "fear", "surprise", "sadness", "disgust", "anger", "anticipation"]
 
-def init_glove(glove_path=_GLOVE_PATH): # Run only first time
+NOT_WHITESPACE = re.compile(r'[^\s]')
+def decode_stacked(document, pos=0, decoder=JSONDecoder()):
+    while True:
+        match = NOT_WHITESPACE.search(document, pos)
+        if not match:
+            return
+        pos = match.start()
+
+        try:
+            obj, pos = decoder.raw_decode(document, pos)
+        except JSONDecodeError:
+            # do something sensible if there's some error
+            raise
+        yield obj
+
+def init_glove(): # Run only first time
     """
     Sets up the glove embedding dictionary.
     First 4 indices are reserved for: '<pad>', '<unk>', '<sos>', '<eos>'
@@ -52,7 +74,7 @@ def init_glove(glove_path=_GLOVE_PATH): # Run only first time
     words, word2idx = [], {}
     idx = 4
     vectors = bcolz.carray(
-        np.zeros(1), rootdir='{}/27B.{}d.dat'.format(glove_path, _EMB_DIM), mode='w')
+        np.zeros(1), rootdir='{}/27B.{}d.dat'.format(_GLOVE_PATH, _EMB_DIM), mode='w')
 
     words.append(PAD_TOKEN)
     words.append(UNK_TOKEN)
@@ -70,7 +92,7 @@ def init_glove(glove_path=_GLOVE_PATH): # Run only first time
     vectors.append(random_vector.copy())
     vectors.append(random_vector.copy())
 
-    with open('{}/glove.twitter.27B.{}d.txt'.format(glove_path, _EMB_DIM), 'rb') as f:
+    with open('{}/glove.twitter.27B.{}d.txt'.format(_GLOVE_PATH, _EMB_DIM), 'rb') as f:
         for l in f:
             line = l.decode().split()
             word = line[0]
@@ -81,12 +103,12 @@ def init_glove(glove_path=_GLOVE_PATH): # Run only first time
             vectors.append(vect)
 
     vectors = bcolz.carray(vectors.reshape((1193518, _EMB_DIM)),
-                           rootdir='{}/27B.{}.dat'.format(glove_path, _EMB_DIM), mode='w')
+                           rootdir='{}/27B.{}.dat'.format(_GLOVE_PATH, _EMB_DIM), mode='w')
     vectors.flush()
     pickle.dump(words, open(
-        '{}/27B.{}_words.pkl'.format(glove_path, _EMB_DIM), 'wb'))
+        '{}/27B.{}_words.pkl'.format(_GLOVE_PATH, _EMB_DIM), 'wb'))
     pickle.dump(word2idx, open(
-        '{}/27B.{}_idx.pkl'.format(glove_path, _EMB_DIM), 'wb'))
+        '{}/27B.{}_idx.pkl'.format(_GLOVE_PATH, _EMB_DIM), 'wb'))
     return idx
 
 
@@ -139,7 +161,7 @@ def create_dataset(data_type="train"):
     data_type = "dev" if data_type == "train" else data_type
     annotation_file = open(annotation_path, "r")
     raw_data = json.load(annotation_file, object_pairs_hook=OrderedDict)
-    glove = load_glove()
+    #glove = load_glove()
 
     text_arr, all_labels, char_arr, mask_arr = [], [], [], []
     stories_dat = []
@@ -156,19 +178,19 @@ def create_dataset(data_type="train"):
             if(story["partition"] != data_type):
                 continue 
 
-            sentences = story["lines"]
-            characters = sentences['1']["characters"]
+            sentences_s = story["lines"]
+            characters = sentences_s['1']["characters"]
 
             
-            s_dim, c_dim, count = len(sentences.keys()), len(characters.keys()), 0
+            s_dim, c_dim, count = len(sentences_s.keys()), len(characters.keys()), 0
             mask_dim = s_dim * c_dim
             sentences, labels, mask = [], [], [0] * mask_dim
 
             for si in range(s_dim):
-                sent = sentences[str(si + 1)]
+                sent = sentences_s[str(si + 1)]
                 text = sent["text"]
                 
-                embed_string = re.sub(r"[^a-zA-Z]+", ' ', text)
+                embed_string = re.sub(r"[^a-zA-Z\?]+", ' ', text)
                 #embedding = [glove.get(word, glove['unk']) for word in embed_string.split(" ")]
                 sentences.append(embed_string)
                 
@@ -183,10 +205,23 @@ def create_dataset(data_type="train"):
                         mask[count] = 1
                     count += 1
 
+            with open("/tmp/input.txt", "w") as f:
+                for sentence in sentences:
+                    f.write("{}\n".format(sentence))
+            os.system("python3 ./preprocessor/bert/extract_features.py --input_file=/tmp/input.txt --output_file=/tmp/output.jsonl --vocab_file=$BERT_BASE_DIR/vocab.txt --bert_config_file=$BERT_BASE_DIR/bert_config.json --init_checkpoint=$BERT_BASE_DIR/bert_model.ckpt --layers=-1,-2,-3,-4 --max_seq_length=128 --batch_size=8")
 
-            # NOTE : Put BERT code here
-            #embeddings = bert(sentences)
-            embeddings = [embeddings[i][1][0] for i in len(embeddings)]
+            with open("/tmp/output.jsonl", "r") as f:
+                json_raw = f.read()
+
+            embeddings = []
+            for obj in decode_stacked(json_raw):
+                cls_layers = obj["features"][0]["layers"]
+                embedding = np.zeros((_EMB_DIM))
+                for i in range(BERT_LAYERS):
+                    emb = np.asarray(cls_layers[i]["values"])
+                    embedding += emb
+                embedding /= BERT_LAYERS
+                embeddings.append(embedding)
 
             mask = np.asarray(mask)
             embeddings = np.asarray(embeddings)
@@ -201,7 +236,27 @@ def create_dataset(data_type="train"):
             # OR - decide
             #stories_dat.append((embeddings, labels, mask, c_dim))
 
-    labels_embedding = np.asarray([glove.get(label, glove['unk']) for label in classes])
+    # NOTE : Shift this to BERT too
+    with open("/tmp/input.txt", "w") as f:
+        for label in classes:
+            f.write("{}\n".format(label))
+    os.system("python3 ./preprocessor/bert/extract_features.py --input_file=/tmp/input.txt --output_file=/tmp/output.jsonl --vocab_file=$BERT_BASE_DIR/vocab.txt --bert_config_file=$BERT_BASE_DIR/bert_config.json --init_checkpoint=$BERT_BASE_DIR/bert_model.ckpt --layers=-1,-2,-3,-4 --max_seq_length=128 --batch_size=8")
+    
+    with open("/tmp/output.jsonl", "r") as f:
+        json_raw = f.read()
+
+    labels_embedding = []
+    for obj in decode_stacked(json_raw):
+        cls_layers = obj["features"][1]["layers"]
+        label = np.zeros((_EMB_DIM))
+        for i in range(BERT_LAYERS):
+            lb = np.asarray(cls_layers[i]["values"])
+            label += lb
+        label /= BERT_LAYERS
+        labels_embedding.append(label)
+    
+    labels_embedding = np.asarray(labels_embedding)
+    #labels_embedding = np.asarray([glove.get(label, glove['unk']) for label in classes])
     adj_m = np.zeros((len(classes), len(classes)))
 
     for i in range(len(all_labels)):
@@ -282,7 +337,7 @@ def parse(load=True, adj_threshold=0.7):
         return train_data, test_data, val_data
 
     data = {"train" : (), "test" :()}
-    msl, mcl, mask_dim, labels_dim, embedding_dim = 0, 0, 0, 0, _EMB_DIM
+    msl, mcl, mask_dim, labels_dim = 0, 0, 0, 0
 
     for dtype in data.keys():
         text_arr, all_labels, mask_arr, char_arr, labels_embedding, adj_m = create_dataset(data_type=dtype)
@@ -334,7 +389,7 @@ def parse(load=True, adj_threshold=0.7):
             'max_sentence_length': msl,
             'mask_dim' : mask_dim,
             'labels_dim' : labels_dim,
-            'emedding_dim' : embedding_dim,
+            'emedding_dim' : _EMB_DIM,
             'vocab_size': _VOCAB,
             'dataset_size': dataset_size,
         }

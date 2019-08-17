@@ -87,7 +87,7 @@ class EntityNetwork():
         
         # Create Learnable Mask
         # sentence_len == no. of words
-        self.story_mask = tf.get_variable("Story_Mask", [self.sentence_len, 1], initializer=self.init) #tf.constant_initializer(1.0))
+        #self.story_mask = tf.get_variable("Story_Mask", [self.sentence_len, 1], initializer=self.init) #tf.constant_initializer(1.0))
         #self.query_mask = tf.get_variable("Query_Mask", [self.sentence_len, 1], initializer=tf.constant_initializer(1.0))
 
         # Create Memory Cell Keys [IF DESIRED - TIE KEYS HERE]

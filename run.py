@@ -1,6 +1,6 @@
 """ Core script for building, valing, and evaluating a Recurrent Entity Network. """
 
-from config import *
+#from config import *
 
 from model.entity_network import EntityNetwork
 from preprocessor.reader import parse, init_glove
@@ -15,6 +15,13 @@ from tqdm import tqdm
 import tensorflow as tf
 from sklearn.metrics import precision_recall_fscore_support
 
+DIR = "/home/nevronas/Projects/Personal-Projects/Dhruv/NeuralDialog-CVAE/data/commonsense/"
+_GLOVE_PATH = '/home/nevronas/word_embeddings/glove_twitter'
+#DIR = "/home/devamanyu/ren-tf2/storycommonsense_data/"
+#GLOVE_PATH = '/home/devamanyu/glove_twitter'
+_EMB_DIM = 768
+_MAX_WLEN = 18
+_VOCAB = -1
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -23,8 +30,8 @@ metadata_path = DIR + "metadata.json"
 partition_path = DIR + "storyid_partition.txt"
 annotation_path = DIR + "json_version/annotations.json"
 
-# with tf.gfile.Open(metadata_path) as metadata_file:
-#     metadata = json.load(metadata_file)
+with tf.gfile.Open(metadata_path) as metadata_file:
+     metadata = json.load(metadata_file)
 
 classes = ["joy", "trust", "fear", "surprise", "sadness", "disgust", "anger", "anticipation"]
 
@@ -40,7 +47,7 @@ tf.app.flags.DEFINE_integer("memory_slots", 8, "Number of dynamic memory slots."
 tf.app.flags.DEFINE_integer("batch_size", 237, "Batch size for training/evaluating.")
 tf.app.flags.DEFINE_integer("eval_batch_size", 237, "Batch size for training/evaluating.")
 tf.app.flags.DEFINE_integer("num_epochs", 50, "Number of Training Epochs.")
-tf.app.flags.DEFINE_float("learning_rate", .1, "Learning rate for ADAM Optimizer.")
+tf.app.flags.DEFINE_float("learning_rate", 0.01, "Learning rate for ADAM Optimizer.")
 tf.app.flags.DEFINE_integer("decay_epochs", 25, "Number of epochs to run before learning rate decay.")
 tf.app.flags.DEFINE_float("decay_rate", 0.5, "Rate of decay for learning rate.")
 tf.app.flags.DEFINE_float("clip_gradients", 40.0, 'Norm to clip gradients to.')
@@ -81,7 +88,6 @@ def adj_to_bias(adj, sizes, nhood=1):
 def main(load=True):
     # Get Vectorized Forms of Stories, Questions, and Answers
     train, test, val = parse()
-    exit()
     train_text_arr, train_all_labels, train_mask_arr, labels_embedding, adj_m = train
     val_text_arr, val_all_labels, val_mask_arr, _, _ = val
     test_text_arr, test_all_labels, test_mask_arr, _, _ = test
@@ -233,4 +239,5 @@ def do_eval(n, bsz, sess, entity_net, text_arr, labels, mask, labels_embedding, 
     
 
 if __name__ == "__main__":
-    tf.app.run()
+    main(load=False)
+    #tf.app.run()

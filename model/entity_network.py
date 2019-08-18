@@ -122,8 +122,8 @@ class EntityNetwork():
         op_embedd = tf.matmul(op_embedd, self.R)
         #logits = tf.reshape(op_embedd, (self.bsz * self.mask_dim,  self.labels_dim, 1))  # Shape: [batch_size, mask_dim, label_dim]
         logits = tf.reshape(op_embedd, (-1, self.labels_dim))  # Shape: [batch_size * mask_dim, label_dim]
-        gat_logits = self.gat_main(self.labels_embedding, self.bias_adj, hid_units=[50], n_heads=[8, 1], nb_classes=self.labels_dim) # Shape : [1, labels_dim, labels_dim]
-        logits = tf.matmul(logits, gat_logits[0])
+        #gat_logits = self.gat_main(self.labels_embedding, self.bias_adj, hid_units=[50], n_heads=[8, 1], nb_classes=self.labels_dim) # Shape : [1, labels_dim, labels_dim]
+        #logits = tf.matmul(logits, gat_logits[0])
         #logits = self.gat_main(logits, self.bias_adj, hid_units=[50], n_heads=[8, 1], nb_classes=1) # Shape : [1, labels_dim, labels_dim]
         logits = tf.reshape(logits, (self.bsz * self.mask_dim, self.labels_dim))
 

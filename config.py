@@ -5,4 +5,8 @@ GLOVE_PATH = '/home/devamanyu/glove_twitter'
 EMB_DIM = 100
 MAX_WLEN = 18
 VOCAB = -1
+ADJACENCY_THRESHOLD = 0.04
+
+
+USE_BERT = False
 

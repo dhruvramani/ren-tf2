@@ -45,14 +45,13 @@ class EntityNetwork():
         self.labels = tf.placeholder(tf.float32, [None, self.labels_dim], name="Labels")
         self.mask = tf.placeholder(tf.int32, [None], name="Mask")
 
-        self.labels_embedding = tf.placeholder(tf.float32, [1, self.labels_dim, self.embed_sz], name="LabelEmbeds")
+        # self.labels_embedding = tf.placeholder(tf.float32, [1, self.labels_dim, self.embed_sz], name="LabelEmbeds")
         self.bias_adj = tf.placeholder(tf.float32, [1, self.labels_dim, self.labels_dim], name="AdjacencyBias") # for GAT
-        self.adj_m = tf.placeholder(tf.float32, [self.labels_dim, self.labels_dim], name="Adjacency")
 
         # Setup Global, Epoch Step 
         self.global_step = tf.Variable(0, trainable=False, name="Global_Step")
         self.epoch_step = tf.Variable(0, trainable=False, name="Epoch_Step")
-        self.epoch_increment = tf.assign(self.epoch_step, tf.add(self.epoch_step, tf.constant(1)))
+        self.epoch_increment = tf.compat.v1.assign(self.epoch_step, tf.add(self.epoch_step, tf.constant(1)))
 
         #self.ground_truth = tf.reshape(self.ground_truth, [-1, self.mask_dim * sekf.labels_dim])
         # Instantiate Network Weights
@@ -60,6 +59,7 @@ class EntityNetwork():
 
         # Build Inference Pipeline
         self.logits = self.inference()
+
 
         self.ground_truth = tf.gather(self.labels, self.mask, axis=0)
         self.logits = tf.gather(self.logits, self.mask, axis=0)
@@ -87,7 +87,7 @@ class EntityNetwork():
         
         # Create Learnable Mask
         # sentence_len == no. of words
-        self.story_mask = tf.get_variable("Story_Mask", [self.sentence_len, 1], initializer=self.init) #tf.constant_initializer(1.0))
+        self.story_mask = tf.get_variable("Story_Mask", [self.story_len, 1], initializer=self.init) #tf.constant_initializer(1.0))
         #self.query_mask = tf.get_variable("Query_Mask", [self.sentence_len, 1], initializer=tf.constant_initializer(1.0))
 
         # Create Memory Cell Keys [IF DESIRED - TIE KEYS HERE]
@@ -120,21 +120,15 @@ class EntityNetwork():
         # map each memory output into label_dim
         op_embedd = tf.reshape(memories, (-1, self.embed_sz))
         op_embedd = tf.matmul(op_embedd, self.R)
-        logits = tf.reshape(op_embedd, (self.bsz * self.mask_dim,  self.labels_dim, 1))  # Shape: [batch_size, mask_dim, label_dim]
+        logits = tf.reshape(op_embedd, (self.bsz * self.mask_dim,  self.labels_dim, 1))  # Shape: [nb_graphs = batch_size*mask_dim, nb_nodes = label_dim, inp_fts = 1]
 
-        logits = self.gat_main(logits, self.bias_adj, hid_units=[50], n_heads=[8, 1], nb_classes=1) # Shape : [1, labels_dim, labels_dim]
-        logits = tf.reshape(logits, (self.bsz * self.mask_dim, self.labels_dim))
+        # logits = self.gat_main(logits, self.bias_adj, hid_units=[50], n_heads=[8, 1], nb_classes=1)
+        logits = tf.squeeze(logits)
 
-        # NOTE : @devamanyu
-        '''
-            Currently doing GAT on labels_embedding and multiplying to logits. Not very useful.
-
-        '''
         return logits
+
+
         
-
-
-
         # Output Module 
         # stacked_memories = tf.stack(memories, axis=1)
         # op_embedd = tf.reduce_sum(tf.multiply(stacked_memories, self.output_w1), axis=[2]) # shape : [None, mem_slots]
@@ -172,6 +166,7 @@ class EntityNetwork():
         
         # TODO : Might have to implement my own loss
         return tf.losses.sigmoid_cross_entropy(self.ground_truth, self.logits)
+
     '''
     def accuracy(self):
         #ground_truth = tf.gather(self.ground_truth, self.mask_reshaped, axis=0)
@@ -182,6 +177,7 @@ class EntityNetwork():
         recall = tf.metrics.recall(labels=self.ground_truth, predictions=self.logits)
         return f1_score[0], precision[0], recall[0]
     '''
+
     def train(self):
         """
         Build ADAM Optimizer Training Operation.
@@ -265,13 +261,8 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
         self.attention = attention
 
         # Instantiate Dynamic Memory Parameters => CONSTRAIN HERE
-        # NOTE : Change dim back for not attention
-        self.U = None
-        if(self.attention):
-            self.U = tf.get_variable("U", [237, self.mem_sz], initializer=self.init)
-            self.AttentW = tf.get_variable("AttentW", [237, 1896], initializer=self.init)
-        else:
-            self.U = tf.get_variable("U", [self.mem_sz, self.mem_sz], initializer=self.init)
+
+        self.U = tf.get_variable("U", [self.mem_sz, self.mem_sz], initializer=self.init)
         self.V = tf.get_variable("V", [self.mem_sz, self.mem_sz], initializer=self.init)
         self.W = tf.get_variable("W", [self.mem_sz, self.mem_sz], initializer=self.init)
         #self.SoftAttenW = tf.get_variable("SoftAttenW", [237, self.mem_sz], initializer=self.init)
@@ -293,46 +284,53 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
         """
         return [tf.tile(tf.expand_dims(key, 0), [batch_size, 1]) for key in self.keys]
 
-    def __call__(self, inputs, state, scope=None):
+    def __call__(self, inputs, states, scope=None):
         """
         Run the Dynamic Memory Cell on the inputs, updating the memories with each new time step.
 
         :param inputs: 2D Tensor of shape [bsz, mem_sz] representing a story sentence.
         :param states: List of length M, each with 2D Tensor [bsz, mem_sz] => h_j (starts as key).
         """
+
+        if(self.attention):
+            # Update value (character memory) based on self attention
+            # Value= h_component, Query = s_component, Key = w_component
+            all_h = tf.stack(states, axis=1) # Shape: [bsz, memories, mem_sz]
+            all_h = tf.reshape(all_h, [-1, self.mem_sz])
+            all_h = tf.matmul(all_h, self.U)
+            all_h = tf.reshape(all_h, [-1, self.m, self.mem_sz])
+
+
+            d_k = tf.cast(self.mem_sz, dtype=tf.float32)
+            soft = tf.nn.softmax(tf.matmul(all_h, tf.transpose(all_h, perm=[0,2,1])) / d_k)
+
+            attent = tf.matmul(soft, all_h) # Shape: [bsz, memories, mem_sz]
+            states = tf.unstack(attent, axis=1)
+
         new_states = []
-        for block_id, h in enumerate(state):
+        for block_id, h in enumerate(states):
 
             # New State Candidate
-            w_component = tf.matmul(tf.expand_dims(self.keys[block_id], 0), self.V)      # Shape: [1, mem_sz]
-            s_component = tf.matmul(inputs, self.W)                                      # Shape: [bsz, mem_sz]
-
-            if(self.attention):
-                # V = h_component, Q = s_component, K = w_component
-                all_h = tf.stack(new_states[:block_id] + state[block_id:])
-                h_component = all_h * self.U
-                d_k = tf.cast(tf.shape(w_component)[-1], dtype=tf.float32)
-                soft = tf.nn.softmax(tf.matmul(s_component, tf.transpose(w_component)) / d_k)
-                attent = tf.multiply(h_component, soft)
-                attentshape = attent.get_shape().as_list()
-                attent = tf.reshape(attent, [attentshape[0] * attentshape[1], attentshape[2]])
-                attent = tf.matmul(self.AttentW, attent)
-                new_states.append(attent)
+            if(not self.attention):
+                h_component = tf.matmul(h, self.U)                                       # Shape: [bsz, mem_sz]
             else:
-                h_component = tf.matmul(h, self.U)                                           # Shape: [bsz, mem_sz]
-                candidate = self.activation(h_component + w_component + s_component)         # Shape: [bsz, mem_sz]
-                # Gating Function            
-                content_g = tf.reduce_sum(tf.multiply(inputs, h), axis=[1])                  # Shape: [bsz]
-                address_g = tf.reduce_sum(tf.multiply(inputs, 
-                                          tf.expand_dims(self.keys[block_id], 0)), axis=[1]) # Shape: [bsz]
-                g = sigmoid(content_g + address_g)
-
-                # State Update
-                new_h = h + tf.multiply(tf.expand_dims(g, -1), candidate)                    # Shape: [bsz, mem_sz]
-
-                # Unit Normalize State 
-                new_h_norm = tf.nn.l2_normalize(new_h, -1)                                   # Shape: [bsz, mem_sz]
+                h_component = h
             
-                new_states.append(new_h_norm)
-        
+            w_component = tf.matmul(tf.expand_dims(
+                self.keys[block_id], 0), self.V)                                         # Shape: [1, mem_sz]
+            s_component = tf.matmul(inputs, self.W)                                      # Shape: [bsz, mem_sz]
+            candidate = self.activation(h_component + w_component + s_component)         # Shape: [bsz, mem_sz]
+            # Gating Function            
+            content_g = tf.reduce_sum(tf.multiply(inputs, h), axis=[1])                  # Shape: [bsz]
+            address_g = tf.reduce_sum(tf.multiply(inputs, 
+                                        tf.expand_dims(self.keys[block_id], 0)), axis=[1]) # Shape: [bsz]
+            g = sigmoid(content_g + address_g)
+
+            # State Update
+            new_h = h + tf.multiply(tf.expand_dims(g, -1), candidate)                    # Shape: [bsz, mem_sz]
+
+            # Unit Normalize State 
+            new_h_norm = tf.nn.l2_normalize(new_h, -1)                                   # Shape: [bsz, mem_sz]
+            new_states.append(new_h_norm)
+    
         return new_states, new_states

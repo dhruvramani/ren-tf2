@@ -30,4 +30,5 @@ dependencies:
     -  tensorflow-gpu==1.14.0
     -  tflearn==0.3.2
     -  tqdm==4.32.2
+    -  jsonlines==1.2.0
 

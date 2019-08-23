@@ -3,7 +3,7 @@
 from config import *
 
 from model.entity_network import EntityNetwork
-from preprocessor.reader import parse, init_glove
+from preprocessor.reader import parse_data, init_glove, get_adjacency
 
 import os
 import json
@@ -19,8 +19,8 @@ from sklearn.metrics import precision_recall_fscore_support
 
 FLAGS = tf.app.flags.FLAGS
 
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 pickle_path = DIR + "data.pkl"
 metadata_path = DIR + "metadata.json"
@@ -31,20 +31,20 @@ if Path(metadata_path).is_file:
     with tf.io.gfile.GFile(metadata_path) as metadata_file:
         metadata = json.load(metadata_file)
 
-classes = ["joy", "trust", "fear", "surprise", "sadness", "disgust", "anger", "anticipation"]
 
 # Model Details
 tf.app.flags.DEFINE_integer("embedding_size", EMB_DIM, "Dimensionality of word embeddings.")
+tf.app.flags.DEFINE_integer("labels_emb_size", GLOVE_EMB_DIM, "Dimensionality of label embeddings.")
 tf.app.flags.DEFINE_integer("memory_slots", 8, "Number of dynamic memory slots.")
 
 # Training Details
-tf.app.flags.DEFINE_integer("batch_size", 237, "Batch size for training/evaluating.")
-tf.app.flags.DEFINE_integer("eval_batch_size", 237, "Batch size for training/evaluating.")
-tf.app.flags.DEFINE_integer("num_epochs", 50, "Number of Training Epochs.")
-tf.app.flags.DEFINE_float("learning_rate", .1, "Learning rate for ADAM Optimizer.")
-tf.app.flags.DEFINE_integer("decay_epochs", 25, "Number of epochs to run before learning rate decay.")
+tf.app.flags.DEFINE_integer("batch_size", 512, "Batch size for training/evaluating.")
+tf.app.flags.DEFINE_integer("eval_batch_size", 512, "Batch size for training/evaluating.")
+tf.app.flags.DEFINE_integer("num_epochs", 100, "Number of Training Epochs.")
+tf.app.flags.DEFINE_float("learning_rate", .001, "Learning rate for ADAM Optimizer.")
+tf.app.flags.DEFINE_integer("decay_epochs", 50, "Number of epochs to run before learning rate decay.")
 tf.app.flags.DEFINE_float("decay_rate", 0.5, "Rate of decay for learning rate.")
-tf.app.flags.DEFINE_float("clip_gradients", 40.0, 'Norm to clip gradients to.')
+tf.app.flags.DEFINE_float("clip_gradients", 10.0, 'Norm to clip gradients to.')
 
 # Logging Details
 tf.app.flags.DEFINE_integer("validate_every", 1, "Validate every validate_every epochs.")
@@ -60,14 +60,6 @@ def check_if_glove_prepared():
         print("Setting up glove")
         init_glove()
 
-
-# def metrics(logits, truth):
-#     logits[logits > 0.5] = 1
-#     logits[logits < 0.5] = 1
-#     prec = precision_score(truth, logits, average='macro')
-#     recall = recall_score(truth, logits, average='macro')
-#     fscore = f1_score(truth, logits, average='macro')
-#     return fscore, prec, recall
 
 def adj_to_bias(adj, sizes, nhood=1):
     '''
@@ -94,15 +86,21 @@ def adj_to_bias(adj, sizes, nhood=1):
 def main(load=True):
 
     # Get Vectorized Forms
-    train, test, val = parse()
-    train_text_arr, train_all_labels, train_mask_arr, labels_embedding, adj_m = train
-    val_text_arr, val_all_labels, val_mask_arr, _, _ = val
-    test_text_arr, test_all_labels, test_mask_arr, _, _ = test
+    train, test, val = parse_data()
+    train_text_arr, train_all_labels, train_mask_arr = train
+    val_text_arr, val_all_labels, val_mask_arr = val
+    test_text_arr, test_all_labels, test_mask_arr = test
+
+    # Get labels embeddings and adjacency matrix
+    labels_embedding, adj_m = get_adjacency(train_all_labels)
+    
 
     # Framing adjacency matrix as bias
     adj_bias = adj_to_bias(adj_m, adj_m.shape[0], nhood=1)
-    labels_embedding = labels_embedding[np.newaxis] # (nb_graphs, nb_nodes, inp_fts)
-    adj_bias = adj_bias[np.newaxis]  # (nb_graphs, nb_nodes, nb_nodes)
+    labels_embedding = labels_embedding[np.newaxis] # (nb_graphs = 1, nb_nodes, inp_fts)
+    adj_bias = adj_bias[np.newaxis]                    # (nb_graphs = 1, nb_nodes, nb_nodes)
+
+
 
     # Setup Checkpoint + Log Paths
     ckpt_dir = "./checkpoints/"
@@ -114,7 +112,7 @@ def main(load=True):
     with tf.Session() as sess:
         # Instantiate Model
         entity_net = EntityNetwork(metadata['vocab_size'], metadata['max_sentence_length'], FLAGS.batch_size,
-                                   FLAGS.memory_slots, FLAGS.embedding_size, metadata['mask_dim'], metadata['labels_dim'], FLAGS.learning_rate, 
+                                   FLAGS.memory_slots, FLAGS.embedding_size, FLAGS.labels_emb_size, metadata['mask_dim'], metadata['labels_dim'], FLAGS.learning_rate, 
                                    FLAGS.decay_epochs * (metadata['dataset_size'] / FLAGS.batch_size), FLAGS.decay_rate)
         
         # Initialize Saver
@@ -154,6 +152,7 @@ def main(load=True):
                                                   feed_dict={entity_net.S: train_text_arr[start:end], 
                                                              entity_net.labels: labels_unrolled,
                                                              entity_net.mask: mask_index,
+                                                             entity_net.labels_embedding: labels_embedding,
                                                              entity_net.bias_adj : adj_bias})
 
                 train_loss.append(curr_loss)
@@ -177,7 +176,7 @@ def main(load=True):
             
             # Validate every so often
             if epoch % FLAGS.validate_every == 0:
-                val_loss, val_metric = do_eval(val_n, bsz, sess, entity_net, val_text_arr, val_all_labels, val_mask_arr, adj_bias)
+                val_loss, val_metric = do_eval(val_n, bsz, sess, entity_net, val_text_arr, val_all_labels, val_mask_arr, labels_embedding, adj_bias)
                 
                 
                 # Add val loss, val acc to data 
@@ -191,7 +190,8 @@ def main(load=True):
                     best_val_loss = val_loss
                     best_val_metric = val_metric
                     best_val_epoch = epoch
-                    test_loss, test_metric = do_eval(test_n, eval_bsz, sess, entity_net, test_text_arr, test_all_labels, test_mask_arr, adj_bias)
+                    test_loss, test_metric = do_eval(
+                        test_n, eval_bsz, sess, entity_net, test_text_arr, test_all_labels, test_mask_arr, labels_embedding, adj_bias)
                     tqdm.write(f"Test loss: {test_loss}   ;   [P, R, F-score]: {test_metric}")
 
 
@@ -215,7 +215,7 @@ def main(load=True):
         tqdm.write(f"Test loss: {test_loss}   ;   [P, R, F-score]: {test_metric}")
         
 
-def do_eval(n, bsz, sess, entity_net, text_arr, labels, mask, adj_bias):
+def do_eval(n, bsz, sess, entity_net, text_arr, labels, mask, labels_embedding, adj_bias):
     """Perform an Evaluation Epoch on the Given Data"""
 
     eval_loss, y_true, y_pred = [], [], []
@@ -230,6 +230,7 @@ def do_eval(n, bsz, sess, entity_net, text_arr, labels, mask, adj_bias):
                                                  feed_dict={entity_net.S: text_arr[start:end],
                                                             entity_net.labels: labels_unrolled,
                                                             entity_net.mask: mask_index,
+                                                            entity_net.labels_embedding: labels_embedding,
                                                             entity_net.bias_adj : adj_bias})
         eval_loss.append(curr_eval_loss)    
         ground_truth = ground_truth.astype("int")
@@ -243,5 +244,8 @@ def do_eval(n, bsz, sess, entity_net, text_arr, labels, mask, adj_bias):
     
 
 if __name__ == "__main__":
-    check_if_glove_prepared()
+    
+    if not USE_BERT:
+        check_if_glove_prepared()
+    
     tf.compat.v1.app.run()

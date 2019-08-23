@@ -12,16 +12,14 @@ import json
 import bcolz
 import pickle
 import numpy as np
+import jsonlines
 from tqdm import tqdm
 from collections import OrderedDict
 from preprocessor.tokenizer import Tokenizer
 from bert_embedding import BertEmbedding
 
-FORMAT_STR = "qa%d_"
-PAD_ID = 0
-SPLIT_RE = re.compile('(\W+)?')
-DATA_TYPES = ['train', 'valid', 'test']
 
+PAD_ID = 0
 
 PAD_TOKEN = '<pad>'
 UNK_TOKEN = '<unk>'
@@ -30,24 +28,31 @@ EOS_TOKEN = '<eos>'
 PAD_ID, UNK_ID, SOS_ID, EOS_ID = [0, 1, 2, 3]
 
 
-# Tokenizer
+# t
 tokenizer = Tokenizer('spacy')
 
 
 glove = {}
 
-train_pickle_path = DIR + "train_data.pkl"
-test_pickle_path = DIR + "test_data.pkl"
-val_pickle_path = DIR + "val_data.pkl"
+
+LOC = "BERT" if USE_BERT else "GLOVE"
+if not os.path.exists(DIR+LOC):
+    os.makedirs(DIR+LOC)
+train_pickle_path = DIR + f"{LOC}/train_data.pkl"
+test_pickle_path = DIR + f"{LOC}/test_data.pkl"
+val_pickle_path = DIR + f"{LOC}/val_data.pkl"
+metadata_path = DIR + f"{LOC}/metadata.json"
+
 partition_path = DIR + "storyid_partition.txt"
-metadata_path = DIR + "metadata.json"
 annotation_path = DIR + "json_version/annotations.json"
 
-# ctx = mx.gpu(0)
-# bert = BertEmbedding(ctx=ctx)
+
 classes = ["joy", "trust", "fear", "surprise", "sadness", "disgust", "anger", "anticipation"]
 
-def init_glove(glove_path=_GLOVE_PATH): # Run only first time
+
+
+
+def init_glove(glove_path=GLOVE_PATH): # Run only first time
     """
     Sets up the glove embedding dictionary.
     First 4 indices are reserved for: '<pad>', '<unk>', '<sos>', '<eos>'
@@ -55,7 +60,7 @@ def init_glove(glove_path=_GLOVE_PATH): # Run only first time
     words, word2idx = [], {}
     idx = 4
     vectors = bcolz.carray(
-        np.zeros(1), rootdir='{}/27B.{}d.dat'.format(glove_path, _EMB_DIM), mode='w')
+        np.zeros(1), rootdir='{}/27B.{}d.dat'.format(glove_path, GLOVE_EMB_DIM), mode='w')
 
     words.append(PAD_TOKEN)
     words.append(UNK_TOKEN)
@@ -67,13 +72,13 @@ def init_glove(glove_path=_GLOVE_PATH): # Run only first time
     word2idx[SOS_TOKEN] = SOS_ID
     word2idx[EOS_TOKEN] = EOS_ID
 
-    vectors.append(np.zeros(_EMB_DIM).astype(np.float))
+    vectors.append(np.zeros(GLOVE_EMB_DIM).astype(np.float))
     random_vector = np.random.uniform(-0.25, 0.25, 100).astype(np.float)
     vectors.append(random_vector.copy())
     vectors.append(random_vector.copy())
     vectors.append(random_vector.copy())
 
-    with open('{}/glove.twitter.27B.{}d.txt'.format(glove_path, _EMB_DIM), 'rb') as f:
+    with open('{}/glove.twitter.27B.{}d.txt'.format(glove_path, GLOVE_EMB_DIM), 'rb') as f:
         for l in f:
             line = l.decode().split()
             word = line[0]
@@ -83,58 +88,137 @@ def init_glove(glove_path=_GLOVE_PATH): # Run only first time
             vect = np.array(line[1:]).astype(np.float)
             vectors.append(vect)
 
-    vectors = bcolz.carray(vectors.reshape((1193518, _EMB_DIM)),
-                           rootdir='{}/27B.{}.dat'.format(glove_path, _EMB_DIM), mode='w')
+    vectors = bcolz.carray(vectors.reshape((1193518, GLOVE_EMB_DIM)),
+                           rootdir='{}/27B.{}.dat'.format(glove_path, GLOVE_EMB_DIM), mode='w')
     vectors.flush()
     pickle.dump(words, open(
-        '{}/27B.{}_words.pkl'.format(glove_path, _EMB_DIM), 'wb'))
+        '{}/27B.{}_words.pkl'.format(glove_path, GLOVE_EMB_DIM), 'wb'))
     pickle.dump(word2idx, open(
-        '{}/27B.{}_idx.pkl'.format(glove_path, _EMB_DIM), 'wb'))
+        '{}/27B.{}_idx.pkl'.format(glove_path, GLOVE_EMB_DIM), 'wb'))
     return idx
 
-
-def tokenize(sentence):
-    "Tokenize a string by splitting on non-word characters and stripping whitespace."
-    return [token.strip().lower() for token in re.split(SPLIT_RE, sentence) if token.strip()]
-
 def load_glove():
-    global _VOCAB
-    vectors = bcolz.open('{}/27B.{}.dat'.format(_GLOVE_PATH, _EMB_DIM))[:]
-    words = pickle.load(open('{}/27B.{}_words.pkl'.format(_GLOVE_PATH, _EMB_DIM), 'rb'))
-    word2idx = pickle.load(open('{}/27B.{}_idx.pkl'.format(_GLOVE_PATH, _EMB_DIM), 'rb'))
+    """
+        Load glove dictionary
+        TODO: try 300 dimensional glove embeddings
+    """
+    global VOCAB
+    vectors = bcolz.open('{}/27B.{}.dat'.format(GLOVE_PATH, GLOVE_EMB_DIM))[:]
+    words = pickle.load(open('{}/27B.{}_words.pkl'.format(GLOVE_PATH, GLOVE_EMB_DIM), 'rb'))
+    word2idx = pickle.load(open('{}/27B.{}_idx.pkl'.format(GLOVE_PATH, GLOVE_EMB_DIM), 'rb'))
 
-    if(_VOCAB == -1):
-        _VOCAB = len(words)
+    if(VOCAB == -1):
+        VOCAB = len(words)
 
     return {w: vectors[word2idx[w]] for w in words}
 
+
+def get_bert(sentences):
+    """
+        Returns BERT sentence embeddings for provided sentence text
+    """
+
+    BERT_LAYERS = 4
+
+    with open("/tmp/input.txt", "w") as f:
+        for sentence in sentences:
+            f.write(f"{sentence}\n")
+
+    os.system(f"python3 ./preprocessor/bert/extract_features.py \
+              --input_file=/tmp/input.txt \
+              --output_file=/tmp/output.jsonl \
+              --vocab_file={BERT_BASE_DIR}/vocab.txt \
+              --bert_config_file={BERT_BASE_DIR}/bert_config.json \
+              --init_checkpoint={BERT_BASE_DIR}/bert_model.ckpt \
+              --layers=-1,-2,-3,-4 \
+              --max_seq_length=128 \
+              --batch_size=60")
+
+    sentence_embeddings = []
+    with jsonlines.open('/tmp/output.jsonl') as reader:
+        for obj in reader:
+            # 0 is for first toke -> [CLS]
+            cls_layers = obj["features"][0]["layers"]
+            embedding = np.zeros((BERT_EMB_DIM))
+            for i in range(BERT_LAYERS):
+                embedding += np.asarray(cls_layers[i]["values"])
+            embedding /= BERT_LAYERS
+            sentence_embeddings.append(embedding)
+    return np.array(sentence_embeddings)
+
+
+def prepare_for_bert(text_arr):
+    """
+        Function first flattens all sentences into a single list, gets the bert embeddings 
+        and then reshapes them into story-wise setting
+    """
+    print("Preparing for BERT feature extraction")
+
+    # Flatten all sentences across all stories 
+    all_sentences = []
+    cumulative_sentence_nums = []
+    start, end = 0,0
+
+    cnt=0
+    for sentences in text_arr:
+        for sent in sentences:
+            all_sentences.append(sent)
+        start = end
+        end = end + len(sentences)
+        cnt+= len(sentences)
+        cumulative_sentence_nums.append((start, end))
+
+    # get bert embeddings of all the sentences
+    # numpy matrix: [# total_sentences, 768]
+    bert_embeddings = get_bert(all_sentences)
+
+    # Reshape sentences into story-wise manner
+    sentence_embeddings = []
+    for start, end in cumulative_sentence_nums:
+        sentence_embeddings.append(bert_embeddings[start:end])
+    
+    return sentence_embeddings
+
+
+
+
+
 def get_labels(charay):
-        ann = []
-        for i in range(3):
-            try :
-                ann.append(charay["emotion"]["ann{}".format(i)]["plutchik"])
-            except:
-                print("ann{} ignored".format(i))
+    """
+        Filtering labels as per details mention in original dataset release notes.
+    """
+    ann = []
+    for i in range(3):
+        try :
+            ann.append(charay["emotion"]["ann{}".format(i)]["plutchik"])
+        except:
+            # print("ann{} ignored".format(i))
+            continue
 
-        if(len(ann) == 0): # NOTE - change this maybe
-            return [0 for _ in classes]
+    if(len(ann) == 0): # NOTE - change this maybe
+        return [0 for _ in classes]
 
-        final_dict = dict()
-        for classi in classes:
-            final_dict[classi] = [1, 1, 1]
+    final_dict = dict()
+    for classi in classes:
+        final_dict[classi] = [1, 1, 1]
 
-        for idx in range(len(ann)):
-            for i in ann[idx]:
-                if(i[:-2] in final_dict.keys()):
-                    final_dict[i[:-2]][idx] = int(i[-1])
+    for idx in range(len(ann)):
+        for i in ann[idx]:
+            if(i[:-2] in final_dict.keys()):
+                final_dict[i[:-2]][idx] = int(i[-1])
 
-        majority = []
-        for key in final_dict.keys():
-            if(int(sum(final_dict[key]) / 3) >= 2):
-                majority.append(key) #[key if(floor(sum(final_dict[key]) / 3) >= 2) for key in final_dict.keys()]
+    majority = []
+    for key in final_dict.keys():
+        if(int(sum(final_dict[key]) / 3) >= 2):
+            majority.append(key) #[key if(floor(sum(final_dict[key]) / 3) >= 2) for key in final_dict.keys()]
 
-        onehot = [1 if i in majority else 0 for i in classes]
-        return onehot
+    onehot = [1 if i in majority else 0 for i in classes]
+    return onehot
+
+
+
+
+
 
 def create_dataset(data_type="train"):
     global annotation_path, partition_path
@@ -142,68 +226,87 @@ def create_dataset(data_type="train"):
     data_type = "dev" if data_type == "train" else data_type
     annotation_file = open(annotation_path, "r")
     raw_data = json.load(annotation_file, object_pairs_hook=OrderedDict)
-    glove = load_glove()
+
+    if not USE_BERT:
+        glove = load_glove()
 
     text_arr, all_labels, char_arr, mask_arr = [], [], [], []
-    stories_dat = []
-    with open(partition_path, "r") as partition_file:
-        for line in partition_file:
-            id_key = line.split("\t")[0]
 
-            if id_key not in raw_data.keys():
-                print("Here")
-                continue
 
-            story = raw_data[id_key]
+    for line in open(partition_path, "r"):
+        id_key = line.split("\t")[0]
+
+        if id_key not in raw_data.keys():
+            print("Here")
+            continue
+
+        story = raw_data[id_key]
+        
+        if(story["partition"] != data_type):
+            continue 
+
+        sentences = story["lines"]
+        characters = sentences['1']["characters"]
+
+        
+        s_dim, c_dim, count = len(sentences.keys()), len(characters.keys()), 0
+        mask_dim = s_dim * c_dim
+        sentence_embeddings, labels, mask = [], [], [0] * mask_dim
+
+        for si in range(s_dim):
+            sent = sentences[str(si + 1)]
+            text = sent["text"]
+            text = tokenizer(text)
             
-            if(story["partition"] != data_type):
-                continue 
+            if USE_BERT:
+                # Accumulate normal text and get BERT representations later in batches
+                sentence_rep = " ".join(text) 
+            else:
+                # Glove averaging
+                sentence_rep = [glove.get(word, glove['unk']) for word in text]
+                sentence_rep = np.mean(np.array(sentence_rep), axis=0)
 
-            sentences = story["lines"]
-            characters = sentences['1']["characters"]
-
+            sentence_embeddings.append(sentence_rep)
             
-            s_dim, c_dim, count = len(sentences.keys()), len(characters.keys()), 0
-            mask_dim = s_dim * c_dim
-            sentences, labels, mask = [], [], [0] * mask_dim
+            charecs = list(sent["characters"].keys())
+            labels.append([])
+            for cj in range(c_dim):
+                char = sent["characters"][charecs[cj]]
+                one_hot = get_labels(char)
+                labels[si].append([])
+                labels[si][cj] = one_hot
+                if(1 in one_hot):
+                    mask[count] = 1
+                count += 1
+        
+        # If BERT, then we delay the sentence representation extraction to be done at once for faster time
+        embeddings = np.asarray(sentence_embeddings) if not USE_BERT else sentence_embeddings
 
-            for si in range(s_dim):
-                sent = sentences[str(si + 1)]
-                text = sent["text"]
-                
-                embed_string = re.sub(r"[^a-zA-Z]+", ' ', text)
-                #embedding = [glove.get(word, glove['unk']) for word in embed_string.split(" ")]
-                sentences.append(embed_string)
-                
-                charecs = list(sent["characters"].keys())
-                labels.append([])
-                for cj in range(c_dim):
-                    char = sent["characters"][charecs[cj]]
-                    one_hot = get_labels(char)
-                    labels[si].append([])
-                    labels[si][cj] = one_hot
-                    if(1 in one_hot):
-                        mask[count] = 1
-                    count += 1
+        mask = np.asarray(mask)
+        labels = np.asarray(labels)
+        labels = labels.reshape(labels.shape[0] * labels.shape[1], labels.shape[2])
+        
+        all_labels.append(labels)   # Shape : [stories, s_d * c_d, labels_dim]
+        mask_arr.append(mask)       # Shape : [stories, s_d * c_d]
+        text_arr.append(embeddings) # Shape : [stories, s_d, embedding_dim]
+        char_arr.append(c_dim)      # Shape : [stories, 1]  - No. of chars. - to find upper bound    
+
+    if USE_BERT:
+        text_arr = prepare_for_bert(text_arr)
+
+    return text_arr, all_labels, mask_arr, char_arr
 
 
-            embeddings = bert(sentences)
-            embeddings = [embeddings[i][1][0] for i in len(embeddings)]
 
-            mask = np.asarray(mask)
-            embeddings = np.asarray(embeddings)
-            labels = np.asarray(labels)
-            labels = labels.reshape(labels.shape[0] * labels.shape[1], labels.shape[2])
-            
-            all_labels.append(labels)   # Shape : [stories, s_d * c_d, labels_dim]
-            mask_arr.append(mask)       # Shape : [stories, s_d * c_d]
-            text_arr.append(embeddings) # Shape : [stories, s_d, embedding_dim]
-            char_arr.append(c_dim)      # Shape : [stories, 1]  - No. of chars. - to find upper bound
-            
-            # OR - decide
-            #stories_dat.append((embeddings, labels, mask, c_dim))
+def get_adjacency(all_labels):
+    # TODO: use BERT for label embedding too
+
+    glove = load_glove()
 
     labels_embedding = np.asarray([glove.get(label, glove['unk']) for label in classes])
+
+
+    # data driven adjacency
     adj_m = np.zeros((len(classes), len(classes)))
 
     for i in range(len(all_labels)):
@@ -211,12 +314,23 @@ def create_dataset(data_type="train"):
             idx = np.where(all_labels[i][j] > 0)
             adj_m[idx] += all_labels[i][j]
 
+
+    
+    # self edges are added later, so remove them now
     for i in range(adj_m.shape[0]):
-        adj_m[i] /= adj_m[i][i]
+        adj_m[i] = adj_m[i]/adj_m[i, i]  # p(A|B) = P(A,B)/P(B) = #(A,B)/#(B) 
+        adj_m[i, i] = 0
 
-    # Process more as in the paper
+    adj_m[adj_m >= ADJACENCY_THRESHOLD] = 1
+    adj_m[adj_m < ADJACENCY_THRESHOLD] = 0
+    print(adj_m)
 
-    return text_arr, all_labels, mask_arr, char_arr, labels_embedding, adj_m # stories_dat # - ALL ARE LISTS
+    return labels_embedding, adj_m
+
+
+
+
+
 
 def pad_stories(text_arr, all_labels, mask_arr, max_sentence_length, max_char_length):
     
@@ -260,75 +374,78 @@ def pad_stories(text_arr, all_labels, mask_arr, max_sentence_length, max_char_le
     mask_arr = np.expand_dims(mask_arr, 2)
     return text_arr, all_labels, mask_arr
 
-def parse(load=True, adj_threshold=0.7):
 
-    train_data, test_data, val_data = (), (), ()
+
+
+
+
+
+
+
+def parse_data(load=True):
     
-    if(os.path.isfile(train_pickle_path) and load == True):
-        file = open(train_pickle_path, 'rb+')
-        train_data = pickle.load(file)
-        file.close()
+    def load_pickle_data(pickle_path):
+        if(os.path.isfile(pickle_path) and load == True):
+            file = open(pickle_path, 'rb+')
+            data = pickle.load(file)
+            file.close()
+            return data
+        return None
+    
+    train_data = load_pickle_data(train_pickle_path)
+    val_data = load_pickle_data(val_pickle_path)
+    test_data = load_pickle_data(test_pickle_path)
 
-    if(os.path.isfile(test_pickle_path) and load == True):
-        file = open(test_pickle_path, 'rb+')
-        test_data = pickle.load(file)
-        file.close()
-
-    if(os.path.isfile(val_pickle_path) and load == True):
-        file = open(val_pickle_path, 'rb+')
-        val_data = pickle.load(file)
-        file.close()
-
-    if(len(train_data) != 0 and len(test_data) != 0 and len(val_data) != 0):
-        print(train_data[0].shape, train_data[1].shape, train_data[2].shape, test_data[0].shape)
+    if((train_data is not None) and (val_data is not None) and (test_data is not None) ):
+        print(train_data[0].shape, train_data[1].shape,
+              train_data[2].shape, test_data[0].shape)
         return train_data, test_data, val_data
 
+
+        
+
     data = {"train" : (), "test" :()}
-    msl, mcl, mask_dim, labels_dim, embedding_dim = 0, 0, 0, 0, _EMB_DIM
+    msl, mcl, mask_dim, labels_dim, embedding_dim = 0, 0, 0, 0, EMB_DIM
 
     for dtype in data.keys():
-        text_arr, all_labels, mask_arr, char_arr, labels_embedding, adj_m = create_dataset(data_type=dtype)
-    
+        text_arr, all_labels, mask_arr, char_arr= create_dataset(data_type=dtype)
+
+        
         dataset_size = len(text_arr)
         sentence_lengths = [story.shape[0] for story in text_arr]
-        #word_lengths = [len(story[ss]) for story in text_arr for ss in range(story.shape[0])]
 
         max_sentence_length = max(sentence_lengths)
         max_char_length = max(char_arr)
-
-        if(max_sentence_length > msl):
-            msl = max_sentence_length
-
-        if(max_char_length > mcl):
-            mcl = max_char_length
+        msl = max(msl, max_sentence_length)
+        mcl = max(mcl, max_char_length)
 
         _, labels_dim = len(all_labels[0]), len(all_labels[0][0])
         mask_dim = max_sentence_length*max_char_length
-        data[dtype] = (text_arr, all_labels,  mask_arr, labels_embedding, adj_m)
-        # TODO : MOVE
-    print(msl, mcl)  
+        data[dtype] = (text_arr, all_labels,  mask_arr)
+
+    print(msl, mcl)
 
     for dtype in data.keys():
-        text_arr, all_labels, mask_arr, labels_embedding, adj_m = data[dtype]
+        text_arr, all_labels, mask_arr= data[dtype]
         text_arr, all_labels, mask_arr = pad_stories(text_arr, all_labels, mask_arr, msl, mcl)
-        data[dtype] = (text_arr, all_labels,  mask_arr, labels_embedding, adj_m)
+        print(text_arr.shape)
+        data[dtype] = (text_arr, all_labels,  mask_arr)
 
+
+
+
+
+    # Splitting data in train and validation sets
     nsamples = int(text_arr.shape[0] * 0.8)
-    idx = [i for i in range(text_arr.shape[0])]
+    idx = [i for i in range(data["train"][0].shape[0])]
     np.random.shuffle(idx)
 
-    adj_m = (data["train"][4] + data["test"][4]) / 2.0 # NOTE : @devamanyu - should we go with this?
-    adj_m[adj_m >= adj_threshold] = 1
-    adj_m[adj_m < adj_threshold] = 0
-
-    print(adj_m)
-
-    data["val"] = (data["train"][0][idx[nsamples:]], data["train"][1][idx[nsamples:]], data["train"][2][idx[nsamples:]], data["train"][3], adj_m)
-    data["train"] = (data["train"][0][idx[:nsamples]], data["train"][1][idx[:nsamples]], data["train"][2][idx[:nsamples]], data["test"][3], adj_m)
+    data["val"] = (data["train"][0][idx[nsamples:]], data["train"][1][idx[nsamples:]], data["train"][2][idx[nsamples:]])
+    data["train"] = (data["train"][0][idx[:nsamples]], data["train"][1][idx[:nsamples]], data["train"][2][idx[:nsamples]])
 
     for dtype in data.keys():
-        text_arr, all_labels, mask_arr, _, _ = data[dtype]
-        print(text_arr.shape, all_labels.shape, mask_arr.shape)
+        text_arr, all_labels, mask_arr = data[dtype]
+        print(dtype, text_arr.shape, all_labels.shape, mask_arr.shape)
 
     with open(metadata_path, 'w') as f:
         metadata = {
@@ -337,7 +454,7 @@ def parse(load=True, adj_threshold=0.7):
             'mask_dim' : mask_dim,
             'labels_dim' : labels_dim,
             'emedding_dim' : embedding_dim,
-            'vocab_size': _VOCAB,
+            'vocab_size': VOCAB,
             'dataset_size': dataset_size,
         }
         json.dump(metadata, f)
@@ -351,13 +468,11 @@ def parse(load=True, adj_threshold=0.7):
     with open(val_pickle_path, "wb+") as handle:
         pickle.dump(data["val"], handle)
 
-    return data["train"], data["test"], data["val"] # TODO : Change this
+    exit()
 
-def tokenize(sentence):
-    """
-    Tokenize a string by splitting on non-word characters and stripping whitespace.
-    """
-    return [token.strip().lower() for token in re.split(SPLIT_RE, sentence) if token.strip()]
+    return data["train"], data["test"], data["val"]
+
+
 
 if __name__ == '__main__':
-    parse(load=False, adj_threshold=0.7)
+    parse(load=False)

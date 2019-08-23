@@ -4,6 +4,8 @@ entity_network.py
 Model definition class for the Recurrent Entity Network. Defines Input Encoder,
 Dynamic Memory Cell, and Readout components.
 """
+from config import *
+
 from collections import namedtuple
 from tflearn.activations import sigmoid, softmax
 import functools
@@ -25,7 +27,7 @@ prelu = functools.partial(prelu_func, initializer=tf.constant_initializer(1.0))
 
 
 class EntityNetwork():
-    def __init__(self, vocabulary, story_len, batch_size, memory_slots, embedding_size, mask_dim, labels_dim,
+    def __init__(self, vocabulary, story_len, batch_size, memory_slots, embedding_size, labels_emb_size, mask_dim, labels_dim,
                  learning_rate, decay_steps, decay_rate, clip_gradients=40.0, 
                  initializer=tf.random_normal_initializer(stddev=0.1)):
         """
@@ -35,7 +37,7 @@ class EntityNetwork():
         :param story_len: Maximum length of a story.
         """
         self.vocab_sz, self.story_len, self.mask_dim = vocabulary, story_len, mask_dim
-        self.embed_sz, self.memory_slots, self.init, self.labels_dim = embedding_size, memory_slots, initializer, labels_dim
+        self.embed_sz, self.label_emb_size, self.memory_slots, self.init, self.labels_dim = embedding_size, labels_emb_size, memory_slots, initializer, labels_dim
         self.bsz, self.lr, self.decay_steps, self.decay_rate = batch_size, learning_rate, decay_steps, decay_rate
         self.clip_gradients = clip_gradients
 
@@ -45,7 +47,7 @@ class EntityNetwork():
         self.labels = tf.placeholder(tf.float32, [None, self.labels_dim], name="Labels")
         self.mask = tf.placeholder(tf.int32, [None], name="Mask")
 
-        # self.labels_embedding = tf.placeholder(tf.float32, [1, self.labels_dim, self.embed_sz], name="LabelEmbeds")
+        self.labels_embedding = tf.placeholder(tf.float32, [1, self.labels_dim, self.label_emb_size], name="LabelEmbeds")
         self.bias_adj = tf.placeholder(tf.float32, [1, self.labels_dim, self.labels_dim], name="AdjacencyBias") # for GAT
 
         # Setup Global, Epoch Step 
@@ -118,12 +120,17 @@ class EntityNetwork():
         #print(memories.get_shape().as_list(), len(self.keys), self.keys[0].get_shape().as_list(), story_embeddings.get_shape().as_list())
         # [237, 40, 100] 8 [100] [None, 5, 100]
         # map each memory output into label_dim
-        op_embedd = tf.reshape(memories, (-1, self.embed_sz))
-        op_embedd = tf.matmul(op_embedd, self.R)
-        logits = tf.reshape(op_embedd, (self.bsz * self.mask_dim,  self.labels_dim, 1))  # Shape: [nb_graphs = batch_size*mask_dim, nb_nodes = label_dim, inp_fts = 1]
+        op_embedd = tf.reshape(memories, (-1, self.embed_sz)) # Shape: [batch_size*mask_dim, emb_sze]
+        
 
-        # logits = self.gat_main(logits, self.bias_adj, hid_units=[50], n_heads=[8, 1], nb_classes=1)
-        logits = tf.squeeze(logits)
+        if GAN:
+
+            graph_output = self.gat_main(self.labels_embedding, self.bias_adj, hid_units=[50], n_heads=[8, 1], nb_classes=768)
+            graph_output = tf.squeeze(graph_output) # [classes, emb_sze]
+            logits = tf.matmul(op_embedd, tf.transpose(graph_output, [1,0]))
+        else:
+
+            logits = tf.matmul(op_embedd, self.R)
 
         return logits
 
@@ -247,7 +254,7 @@ class EntityNetwork():
 
 class DynamicMemory(tf.contrib.rnn.RNNCell):
     def __init__(self, memory_slots, memory_size, keys, activation=prelu,
-                 initializer=tf.random_normal_initializer(stddev=0.1), attention=True):
+                 initializer=tf.random_normal_initializer(stddev=0.1)):
         """
         Instantiate a DynamicMemory Cell, with the given number of memory slots, and key vectors.
 
@@ -258,14 +265,13 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
         """ 
         self.m, self.mem_sz, self.keys = memory_slots, memory_size, keys
         self.activation, self.init = activation, initializer
-        self.attention = attention
+        self.attention = ATTENTION
 
         # Instantiate Dynamic Memory Parameters => CONSTRAIN HERE
 
         self.U = tf.get_variable("U", [self.mem_sz, self.mem_sz], initializer=self.init)
         self.V = tf.get_variable("V", [self.mem_sz, self.mem_sz], initializer=self.init)
         self.W = tf.get_variable("W", [self.mem_sz, self.mem_sz], initializer=self.init)
-        #self.SoftAttenW = tf.get_variable("SoftAttenW", [237, self.mem_sz], initializer=self.init)
     
     @property
     def state_size(self):
@@ -304,7 +310,7 @@ class DynamicMemory(tf.contrib.rnn.RNNCell):
             d_k = tf.cast(self.mem_sz, dtype=tf.float32)
             soft = tf.nn.softmax(tf.matmul(all_h, tf.transpose(all_h, perm=[0,2,1])) / d_k)
 
-            attent = tf.matmul(soft, all_h) # Shape: [bsz, memories, mem_sz]
+            attent = tf.matmul(soft, all_h) # Shape: [bsz, memories, mem_sz
             states = tf.unstack(attent, axis=1)
 
         new_states = []

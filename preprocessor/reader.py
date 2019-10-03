@@ -38,10 +38,10 @@ glove = {}
 LOC = "BERT" if USE_BERT else "GLOVE"
 if not os.path.exists(DIR+LOC):
     os.makedirs(DIR+LOC)
-train_pickle_path = DIR + f"{LOC}/train_data.pkl"
-test_pickle_path = DIR + f"{LOC}/test_data.pkl"
-val_pickle_path = DIR + f"{LOC}/val_data.pkl"
-metadata_path = DIR + f"{LOC}/metadata.json"
+train_pickle_path = "{}/train_data.pkl".format(DIR + LOC)
+test_pickle_path = "{}/test_data.pkl".format(DIR + LOC)
+val_pickle_path = "{}/val_data.pkl".format(DIR + LOC)
+metadata_path = "{}/metadata.json".format(DIR + LOC)
 
 partition_path = DIR + "storyid_partition.txt"
 annotation_path = DIR + "json_version/annotations.json"
@@ -122,17 +122,17 @@ def get_bert(sentences):
 
     with open("/tmp/input.txt", "w") as f:
         for sentence in sentences:
-            f.write(f"{sentence}\n")
+            f.write(sentence + "\n")
 
-    os.system(f"python3 ./preprocessor/bert/extract_features.py \
+    os.system("python3 ./preprocessor/bert/extract_features.py \
               --input_file=/tmp/input.txt \
               --output_file=/tmp/output.jsonl \
-              --vocab_file={BERT_BASE_DIR}/vocab.txt \
-              --bert_config_file={BERT_BASE_DIR}/bert_config.json \
-              --init_checkpoint={BERT_BASE_DIR}/bert_model.ckpt \
+              --vocab_file={}/vocab.txt \
+              --bert_config_file={}/bert_config.json \
+              --init_checkpoint={}/bert_model.ckpt \
               --layers=-1,-2,-3,-4 \
               --max_seq_length=128 \
-              --batch_size=60")
+              --batch_size=60".format(BERT_BASE_DIR, BERT_BASE_DIR, BERT_BASE_DIR))
 
     sentence_embeddings = []
     with jsonlines.open('/tmp/output.jsonl') as reader:

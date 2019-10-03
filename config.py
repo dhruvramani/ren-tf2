@@ -1,7 +1,7 @@
-# _DIR = "/home/nevronas/Projects/Personal-Projects/Dhruv/NeuralDialog-CVAE/data/commonsense/"
-# _GLOVE_PATH = '/home/nevronas/word_embeddings/glove_twitter'
-DIR = "/home/devamanyu/ren-tf2/storycommonsense_data/"
-GLOVE_PATH = '/home/devamanyu/glove_twitter'
+DIR = "/home/nevronas/Projects/Personal-Projects/Dhruv/NeuralDialog-CVAE/data/commonsense/"
+GLOVE_PATH = '/home/nevronas/word_embeddings/glove_twitter'
+#DIR = "/home/devamanyu/ren-tf2/storycommonsense_data/"
+#GLOVE_PATH = '/home/devamanyu/glove_twitter'
 
 BERT_BASE_DIR = "./preprocessor/bert/uncased_L-12_H-768_A-12"
 GLOVE_EMB_DIM = 100

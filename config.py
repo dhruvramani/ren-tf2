@@ -1,4 +1,4 @@
-DIR = "/home/nevronas/Projects/Personal-Projects/Dhruv/NeuralDialog-CVAE/data/commonsense/"
+DIR = "/home/nevronas/Projects/Personal-Projects/Dhruv/ren-tf2/data/commonsense/"
 GLOVE_PATH = '/home/nevronas/word_embeddings/glove_twitter'
 BERT_BASE_DIR = "/home/nevronas/word_embeddings/uncased_L-12_H-768_A-12"
 #DIR = "/home/devamanyu/ren-tf2/storycommonsense_data/"

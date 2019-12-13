@@ -1,32 +1,9 @@
 # Recurrent Entity Networks
 Tensorflow/TFLearn Implementation of ["Tracking the World State with Recurrent Entity Networks"](https://arxiv.org/abs/1612.03969) by Henaff et. al.
 
-### Punchline ###
 By building a set of disparate memory cells, each responsible for different concepts, entities, or other content, Recurrent Entity Networks (EntNets) are able to efficiently and robustly maintain a “world-state” - one that can be updated easily and effectively with the influx of new information. 
 
 Furthermore, one can either let EntNet cell keys vary, or specifically seed them with specific embeddings, thereby forcing the model to track a given set of entities/objects/locations, allowing for the easy interpretation of the underlying decision-making process.
-
-### Results ###
-Implementation results are as follows (graphs of training/validation loss will be added later). Some of the tasks 
-are fairly computationally intensive, so it might take a while to get benchmark results.
-
-Note that for efficiency, training stopped after validation accuracy passed a threshold of 95%. This is different than
-the method used in the paper, which runs tasks for 200 epochs, and reports the best model across 10 different runs. The number of runs, epochs to converge, and final train/validation/test accuracies (best on validation over different runs) for this repository relative to the paper results are as follows:
-
-<p align="center"><img src="https://rawgit.com/siddk/entity-network/master/eval/svgs/f27575f13e0a5dd47d5090418b7121b4.svg?invert_in_darkmode" align=middle width=1016.8059pt height=432.5607pt/></p>
-
-Note that the italics above indicate examples of *overfitting*. Note that the notes rows consist of single runs
-of the model - this is probably why multiple runs are necessary. If this continues to happen, I'll look into ways
-to better regularize the network (via dropout, for example).
-
-The **bold** above denotes failure to convergence. I'm not sure why this is happening, but I'll note that Jim
-Fleming reports the same sort of issue in [his implementation](https://github.com/jimfleming/recurrent-entity-networks).
-
-Additionally, plots of the training/validation loss and accuracies through training can be found in eval/qa_id, where
-id is the id of the task at hand. As an example, here is the plot for the graph of Task 1 - Single Supporting Fact's 
-training:
-
-![alt text](https://github.com/siddk/entity-network/blob/master/eval/qa_1/run_1.png "Task 1 - Single Supporting Fact")
 
 ### Components ###
 
